@@ -75,7 +75,7 @@ class pfv3d
 	_Set_P0 _non_optimal;
 	_Set_V _vertices;
 	_List_T _triangles;
-	_Map_PTs _p_to_ts;
+	_Map_PTs _p_to_ts_0, _p_to_ts_1, _p_to_ts_2;
 	pfv3d_display _display;
 	/* === Variables === */
 
@@ -111,7 +111,7 @@ class pfv3d
 	public:
 	void display () { _display.display_frontier(0, _points_0, _vertices, _triangles); }
 	private:
-	void display_i () { _display.display_frontier(1, _points_0, _vertices, _triangles); usleep(1000000); }
+	void display_i () { _display.display_frontier(1, _points_0, _vertices, _triangles); /*usleep(500);*/ }
 	/* === Call the visualiser === */
 
 	/* === Add points to the frontier === */
@@ -223,13 +223,13 @@ class pfv3d
 
 		/* Call each coordinate sweep */
 		_po[0] = 1; _po[1] = 2; _po[2] = 0;
-		sweep<_Set_P0>(_points_0, _add_0, _rem_0);
+		sweep<_Set_P0>(_points_0, _add_0, _rem_0, _p_to_ts_0);
 
 		_po[0] = 2; _po[1] = 0; _po[2] = 1;
-		sweep<_Set_P1>(_points_1, _add_1, _rem_1);
+		sweep<_Set_P1>(_points_1, _add_1, _rem_1, _p_to_ts_1);
 
 		_po[0] = 0; _po[1] = 1; _po[2] = 2;
-		sweep<_Set_P2>(_points_2, _add_2, _rem_2);
+		sweep<_Set_P2>(_points_2, _add_2, _rem_2, _p_to_ts_2);
 
 		/* Remove non optimal points */
 		for(_Set_P0::iterator it = _non_optimal.begin(); it != _non_optimal.end(); ++it) {
@@ -245,14 +245,14 @@ class pfv3d
 	}
 
 	private: template<typename T>
-	void sweep (T &points, T &add, T &rem)
+	void sweep (T &points, T &add, T &rem, _Map_PTs &p_to_ts)
 	{
 		/* Insert sentinels in the projection tree */
-		double sentinel_coord[2][3] = {{0, 0, 0}, {0, 0, 0}};
 		Point *sentinels[2];
-		double borders[3] = {0, 0, 0};
-		borders[_po[0]] = (_limits[_po[0]][1] - _limits[_po[0]][0]) * 0.1;
-		borders[_po[1]] = (_limits[_po[1]][1] - _limits[_po[1]][0]) * 0.1;
+		double sentinel_coord[2][3] = {{0, 0, 0}, {0, 0, 0}}, borders[3] = {0, 0, 0};
+		double range_0 = _limits[_po[0]][1] - _limits[_po[0]][0], range_1 = _limits[_po[1]][1] - _limits[_po[1]][0];
+		borders[_po[0]] = range_0 == 0 ? 1 : range_0 * 0.1;
+		borders[_po[1]] = range_1 == 0 ? 1 : range_1 * 0.1;
 		if(_minmax == 0) {			
 			sentinel_coord[0][_po[0]] = _limits[_po[0]][1] + borders[_po[0]]; sentinel_coord[0][_po[1]] = DMIN;
 			sentinel_coord[1][_po[1]] = _limits[_po[1]][1] + borders[_po[1]]; sentinel_coord[1][_po[0]] = DMIN;
@@ -286,11 +286,11 @@ class pfv3d
 			else redo = 0;
 
 			if(redo == 0) {
-				if(_minmax == 0) insert_only_min(*it, rem_in);
-				else             insert_only_max(*it, rem_in);
+				if(_minmax == 0) insert_only_min(*it, rem_in, p_to_ts);
+				else             insert_only_max(*it, rem_in, p_to_ts);
 			} else {
-				if(_minmax == 0) result = facet_min<T>(it, same_coord, add_in, rem_in);
-				else	         result = facet_max<T>(it, same_coord, add_in, rem_in);
+				if(_minmax == 0) result = facet_min<T>(it, same_coord, add_in, rem_in, p_to_ts);
+				else	         result = facet_max<T>(it, same_coord, add_in, rem_in, p_to_ts);
 			   	/* Save the point for elimination if it is non optimal */
 				if(result == 0) _non_optimal.insert(*it);
 			}
@@ -311,13 +311,13 @@ class pfv3d
 	}
 
 	private:
-	void insert_only_min (Point *point, int &rem_in)
+	void insert_only_min (Point *point, int &rem_in, _Map_PTs &p_to_ts)
 	{
 		/* If point is marked for removal - remove triangles previously created by it */
 		if(point->_state == -1) {
-			auto range = _p_to_ts.equal_range(point);
+			auto range = p_to_ts.equal_range(point);
 			for(auto it = range.first; it != range.second; ++it) _triangles.erase((*it).second);
-			_p_to_ts.erase(point);
+			p_to_ts.erase(point);
 		}
 
 		/* Insert point in the projection tree */
@@ -344,12 +344,12 @@ class pfv3d
 	}
 
 	private: template<typename T>
-	bool facet_min (typename T::iterator &point, const Point *&same_coord, int &add_in, int &rem_in)
+	bool facet_min (typename T::iterator &point, const Point *&same_coord, int &add_in, int &rem_in, _Map_PTs &p_to_ts)
 	{
 		/* Remove triangles previously created by the point */
-		auto range = _p_to_ts.equal_range(*point);
+		auto range = p_to_ts.equal_range(*point);
 		for(auto it = range.first; it != range.second; ++it) _triangles.erase((*it).second);
-		_p_to_ts.erase(*point);
+		p_to_ts.erase(*point);
 
 		/* Insert point in the projection tree */
 		_Tree_Proj::iterator p_it = _projection.insert(*point).first, tmp_it;
@@ -405,8 +405,8 @@ class pfv3d
 			vertices[2] = add_vertex((*current)->_x[_po[0]], (*current)->_x[_po[1]], (*p_it)->_x[_po[2]]) ;
 
 			/* Add triangles 103 and 123 (being 0 the point called into this function) */
-			add_triangle(*p_it, vertices[0], vertices[1], vertices[2]);
-			add_triangle(*p_it, vertices[0], *p_it, vertices[2]);
+			add_triangle(*p_it, vertices[0], vertices[1], vertices[2], p_to_ts);
+			add_triangle(*p_it, vertices[0], *p_it, vertices[2], p_to_ts);
 
 			/* There is no case of same coordinate, analysed only after cycle, when ending this function */
 			same_coord = nullptr;
@@ -447,20 +447,20 @@ class pfv3d
 		}
 
 		/* Add triangles 103 and 123 (being 0 the point called into this function) */
-		add_triangle(*p_it, vertices[0], *p_it, vertices[2]);
-		add_triangle(*p_it, vertices[0], vertices[1], vertices[2]);
+		add_triangle(*p_it, vertices[0], *p_it, vertices[2], p_to_ts);
+		add_triangle(*p_it, vertices[0], vertices[1], vertices[2], p_to_ts);
 
 		return 1;
 	}
 
 	private:
-	void insert_only_max (Point *point, int &rem_in)
+	void insert_only_max (Point *point, int &rem_in, _Map_PTs &p_to_ts)
 	{
 		
 	}
 
 	private: template<typename T>
-	bool facet_max (typename T::iterator &point, const Point *&same_coord, int &add_in, int &rem_in)
+	bool facet_max (typename T::iterator &point, const Point *&same_coord, int &add_in, int &rem_in, _Map_PTs &p_to_ts)
 	{
 		return 1;
 	}
@@ -476,10 +476,10 @@ class pfv3d
 	/* === Add vertex === */
 
 	/* === Add triangle === */
-	void add_triangle(Point *p, const Point *p1, const Point *p2, const Point *p3)
+	void add_triangle(Point *p, const Point *p1, const Point *p2, const Point *p3, _Map_PTs &p_to_ts)
 	{
-		_p_to_ts.insert({p, _triangles.insert(_triangles.end(), Triangle(p1, p2, p3))});
-		display_i();
+		p_to_ts.insert({p, _triangles.insert(_triangles.end(), Triangle(p1, p2, p3))});
+		if(_display_i) display_i();
 	}
 	/* === Add triangle === */
 
@@ -489,7 +489,7 @@ class pfv3d
 		if(!tr.has_node()) return;
 		if(tr.has_right()) print_tree<T>(spaces+4, tr.right());
 		printf("%*s", spaces, "");
-		printf("%g %g %g\t\t\t\t%d\n", (*tr)->_x[0], (*tr)->_x[1], (*tr)->_x[2], tr._node->_balance);
+		printf("%lf %lf %lf\t\t\t\t%d\n", (*tr)->_x[0], (*tr)->_x[1], (*tr)->_x[2], tr._node->_balance);
 		if(tr.has_left()) print_tree<T>(spaces+4, tr.left());
 	}
 };

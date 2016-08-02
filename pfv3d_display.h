@@ -153,10 +153,18 @@ class pfv3d_display
 	public:
 	void display_frontier (bool mode, _Set_P0 &points, _Set_V &vertices, _List_T &triangles)
 	{
-		// int i = 0, *indices = (int*) malloc(triangles.size()*3*sizeof(int));
-		// double *coord = (double*) malloc((points.size()+vertices.size())*3*sizeof(double));
-		int i = 0, indices[triangles.size()*3];
-		double coord[(points.size()+vertices.size())*3];
+		if(triangles.empty()) {
+			_mutex_cond.lock();
+			_cond_renderer.notify_one();
+			if(_mode == 0) _cond_main.wait(_mutex_cond);
+			_mutex_cond.unlock();
+			return;
+		}
+		
+		size_t size_indices = triangles.size()*3*sizeof(int);
+		size_t size_coord = (points.size()+vertices.size())*3*sizeof(double);
+		int i = 0, *indices = (int*) malloc(size_indices);
+		double *coord = (double*) malloc(size_coord);
 
 		/* Get data */
 		for(_Set_P0::iterator it = points.begin(); it != points.end(); ++it) {
@@ -196,9 +204,9 @@ class pfv3d_display
 		glGenBuffers(1, &_data[4]);
 		glBindVertexArray(_data[2]);
 		glBindBuffer(GL_ARRAY_BUFFER, _data[3]);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(coord), coord, GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, size_coord, coord, GL_STATIC_DRAW);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[4]);
-	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_indices, indices, GL_STATIC_DRAW);
 		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 3*sizeof(double), (GLvoid*)0);
 		glEnableVertexAttribArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -216,7 +224,7 @@ class pfv3d_display
 		if(_mode == 0) _cond_main.wait(_mutex_cond);
 		_mutex_cond.unlock();
 
-		// free(indices); free(coord);
+		free(indices); free(coord);
 	}
 	/* === Activate frontier display === */
 

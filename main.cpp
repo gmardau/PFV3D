@@ -5,12 +5,14 @@
 int main(int argc, char const *argv[])
 {
 	pfv3d a;
-	double b[2][3] = {{3, 3, 1}, {1, 1, 3}};
-	a.add_points(2,b);
-	a.add_point(2, 2, 2);
-	a.add_point(3, 3, 3);
-	// a.rem_point(2, 1, 2);
-	// a.display();
-	a.compute(1);
+	FILE *f = fopen("Input/surf05-500.dat", "r");
+	int i; fscanf(f, "%d", &i);
+	double c[3];
+	for(int j = 0; j < i; j++) {
+		fscanf(f, "%lf %lf %lf", &c[0], &c[1], &c[2]);
+		a.add_point(c);
+	}
+	a.compute();
+	a.display();
 	return 0; 
 }
