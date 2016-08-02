@@ -20,7 +20,7 @@
 class pfv3d_display
 {
 
-	typedef std::set<Point *, point_comp<0,1,2>> _Set_P0;
+	typedef tree<tree_avl, Point *, point_comp<0,1,2>> _Set_P0;
 	typedef std::set<Point> _Set_V;
 	typedef std::list<Triangle> _List_T;
 
@@ -153,31 +153,34 @@ class pfv3d_display
 	public:
 	void display_frontier (bool mode, _Set_P0 &points, _Set_V &vertices, _List_T &triangles)
 	{
-		// int i = 0, *indices = (int*) malloc(triangles.size()*3*sizeof(int));
-		// double *coord = (double*) malloc((points.size()+points.size())*3*sizeof(double));
+		int i = 0, *indices = (int*) malloc(triangles.size()*3*sizeof(int));
+		double *coord = (double*) malloc((points.size()+points.size())*3*sizeof(double));
 
-		// /* Get data */
-		// for(_Set_P0::iterator it = points.begin(); it != points.end(); ++it) {
-		// 	(*it)->_did = i/3;
-		// 	coord[i++] = (*it)->_x[0];
-		// 	coord[i++] = (*it)->_x[1];
-		// 	coord[i++] = (*it)->_x[2];
-		// }
-		// for(_Set_V::iterator it = vertices.begin(); it != vertices.end(); ++it) {
-		// 	it->_did = i/3;
-		// 	coord[i++] = it->_x[0];
-		// 	coord[i++] = it->_x[1];
-		// 	coord[i++] = it->_x[2];
-		// }
-		// i = 0;
-		// for(_List_T::iterator it = triangles.begin(); it != triangles.end(); ++it) {
-		// 	indices[i++] = it->_v[0]->_did;
-		// 	indices[i++] = it->_v[1]->_did;
-		// 	indices[i++] = it->_v[2]->_did;
-		// }
+		/* Get data */
+		for(_Set_P0::iterator it = points.begin(); it != points.end(); ++it) {
+			(*it)->_did = i/3;
+			coord[i++] = (*it)->_x[0];
+			coord[i++] = (*it)->_x[1];
+			coord[i++] = (*it)->_x[2];
+			printf("%lf %lf %lf\n", (*it)->_x[0], (*it)->_x[1], (*it)->_x[2]);
+		}
+		for(_Set_V::iterator it = vertices.begin(); it != vertices.end(); ++it) {
+			it->_did = i/3;
+			coord[i++] = it->_x[0];
+			coord[i++] = it->_x[1];
+			coord[i++] = it->_x[2];
+			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
+		}
+		i = 0;
+		for(_List_T::iterator it = triangles.begin(); it != triangles.end(); ++it) {
+			indices[i++] = it->_v[0]->_did;
+			indices[i++] = it->_v[1]->_did;
+			indices[i++] = it->_v[2]->_did;
+			printf("%d %d %d\n", it->_v[0]->_did, it->_v[1]->_did, it->_v[2]->_did);
+		}
 
-		int indices[6] = {0, 1, 2, 2, 3, 4};
-		double coord[15] = {0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1};
+		// int indices[6] = {0, 1, 2, 2, 3, 4};
+		// double coord[15] = {0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1};
 
 		_mutex_data.lock();
 
@@ -214,7 +217,7 @@ class pfv3d_display
 		if(_mode == 0) _cond_main.wait(_mutex_cond);
 		_mutex_cond.unlock();
 
-		// free(indices); free(coord);
+		free(indices); free(coord);
 	}
 	/* === Activate frontier display === */
 
@@ -295,7 +298,7 @@ class pfv3d_display
 
 		/* Draw Triangles */
 		glBindVertexArray(_data[2]);
-		glDrawElements(GL_TRIANGLES, /*_data[1]*/6, GL_UNSIGNED_INT, 0);
+		glDrawElements(GL_TRIANGLES, _data[1], GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
 
 		glUseProgram(0);

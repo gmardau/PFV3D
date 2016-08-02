@@ -11,6 +11,6 @@ int main(int argc, char const *argv[])
 	a.add_point(3, 3, 3);
 	// a.rem_point(2, 1, 2);
 	// a.display();
-	a.compute();
+	a.compute(1);
 	return 0; 
 }
