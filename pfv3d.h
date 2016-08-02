@@ -111,7 +111,7 @@ class pfv3d
 	public:
 	void display () { _display.display_frontier(0, _points_0, _vertices, _triangles); }
 	private:
-	void display_i () { _display.display_frontier(1, _points_0, _vertices, _triangles); usleep(5000000); }
+	void display_i () { _display.display_frontier(1, _points_0, _vertices, _triangles); usleep(1000000); }
 	/* === Call the visualiser === */
 
 	/* === Add points to the frontier === */
@@ -240,6 +240,7 @@ class pfv3d
 		}
 		_non_optimal.clear();
 
+		printf("qwer\n");
 		if(display) this->display();
 	}
 
@@ -388,7 +389,7 @@ class pfv3d
 				tmp_it = current.next();
 				/* If successor is marked for removal and is dominated - remove it from the projection
 				   tree and update their number in the projection tree */
-				if((*p_it)->_x[_po[1]] <= (*current)->_x[_po[2]]) { _projection.erase(current); --rem_in; }
+				if((*p_it)->_x[_po[1]] <= (*current)->_x[_po[1]]) { _projection.erase(current); --rem_in; }
 			}
 
 			/* If the previous point called into this function has the same coordinate as the
@@ -404,8 +405,8 @@ class pfv3d
 			vertices[2] = add_vertex((*current)->_x[_po[0]], (*current)->_x[_po[1]], (*p_it)->_x[_po[2]]) ;
 
 			/* Add triangles 103 and 123 (being 0 the point called into this function) */
-			add_triangle(*p_it, vertices[0], *p_it, vertices[2]);
 			add_triangle(*p_it, vertices[0], vertices[1], vertices[2]);
+			add_triangle(*p_it, vertices[0], *p_it, vertices[2]);
 
 			/* There is no case of same coordinate, analysed only after cycle, when ending this function */
 			same_coord = nullptr;
@@ -427,14 +428,14 @@ class pfv3d
 		if(tmp2_it.info() != nullptr && (*p_it)->_x[_po[2]] == (*tmp2_it)->_x[_po[2]]
 		   && (*tmp2_it)->_x[_po[1]] < (*p_it)->_x[_po[1]] && (*tmp2_it)->_x[_po[0]] < (*current)->_x[_po[0]]) {
 			/* Create vertex 3 */
-			vertices[2] = add_vertex((*tmp2_it)->_x[_po[0]], (*p_it)->_x[_po[0]], (*p_it)->_x[_po[2]]);
+			vertices[2] = add_vertex((*tmp2_it)->_x[_po[0]], (*p_it)->_x[_po[1]], (*p_it)->_x[_po[2]]);
 			/* Save vertex 2 for next function */
 			same_coord = vertices[1];
 		}
 		/* The case of same coordinate does not occur (default case) */
 		else {
 			/* Create vertex 3 */
-			vertices[2] = add_vertex((*current)->_x[_po[0]], (*p_it)->_x[_po[0]], (*p_it)->_x[_po[2]]);
+			vertices[2] = add_vertex((*current)->_x[_po[0]], (*p_it)->_x[_po[1]], (*p_it)->_x[_po[2]]);
 			/* There is no case of same coordinate */
 			same_coord = nullptr;	
 			/* If intersected point is partially dominated - remove it from the representation tree */
