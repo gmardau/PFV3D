@@ -20,8 +20,7 @@
 class pfv3d_display
 {
 
-	typedef tree<tree_avl, Point *, point_comp<0,1,2>> _Set_P0;
-	typedef std::set<Point> _Set_V;
+	typedef tree<tree_avl, Point *, point_comp<0,1,2>> _Tree_P0;
 	typedef std::list<Triangle> _List_T;
 
 	/* === Variables === */
@@ -151,7 +150,7 @@ class pfv3d_display
 
 	/* === Activate frontier display === */
 	public:
-	void display_frontier (bool mode, _Set_P0 &points, _Set_V &vertices, _List_T &triangles)
+	void display_frontier (bool mode, _Tree_P0 &points, _Tree_P0 &vertices, _List_T &triangles)
 	{
 		if(triangles.empty()) {
 			_mutex_cond.lock();
@@ -167,17 +166,17 @@ class pfv3d_display
 		double *coord = (double*) malloc(size_coord);
 
 		/* Get data */
-		for(_Set_P0::iterator it = points.begin(); it != points.end(); ++it) {
+		for(_Tree_P0::iterator it = points.begin(); it != points.end(); ++it) {
 			(*it)->_did = i/3;
 			coord[i++] = (*it)->_x[0];
 			coord[i++] = (*it)->_x[1];
 			coord[i++] = (*it)->_x[2];
 		}
-		for(_Set_V::iterator it = vertices.begin(); it != vertices.end(); ++it) {
-			it->_did = i/3;
-			coord[i++] = it->_x[0];
-			coord[i++] = it->_x[1];
-			coord[i++] = it->_x[2];
+		for(_Tree_P0::iterator it = vertices.begin(); it != vertices.end(); ++it) {
+			(*it)->_did = i/3;
+			coord[i++] = (*it)->_x[0];
+			coord[i++] = (*it)->_x[1];
+			coord[i++] = (*it)->_x[2];
 		}
 		i = 0;
 		for(_List_T::iterator it = triangles.begin(); it != triangles.end(); ++it) {
