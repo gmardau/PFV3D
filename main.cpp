@@ -11,23 +11,14 @@ int main(int argc, char const *argv[])
 	for(int j = 0; j < i; j++) {
 		fscanf(f, "%lf %lf %lf", &c[j][0], &c[j][1], &c[j][2]);
 	}
-	for(int j = 0; j < i; j++){
+	for(int j = 450; j < i; j++){
 		a.add_point(c[j]);}
-		a.compute(3);
-	// a.display();
-	// for(int j = 0; j < i; j++) {
-	// 	a.add_point(c[rand()%i]);
-	// 	a.add_point(c[rand()%i]);
-	// 	a.add_point(c[rand()%i]);
-	// 	a.add_point(c[rand()%i]);
-	// 	a.compute(1);
-	// 	// a.display();
-	// }
-	// for(int j = 0; j < i; j++) {
-	// 	a.rem_point(c[rand()%i]);
-	// 	a.compute(1);
-	// 	// a.display();
-	// }
+	a.compute(1);
+	for(int j = 450; j < i; j++) {
+		a.rem_point(c[j]);
+		a.compute(2);
+		// a.display();
+	}
 	// a.add_point(1, 1, 3);
 	// a.compute();
 	// a.display();

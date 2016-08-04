@@ -160,6 +160,10 @@ class pfv3d_display
 	void display_frontier (bool mode, int np, _List_T &triangles)
 	{
 		if(triangles.empty()) {
+			glDeleteVertexArrays(1, &_data[2]);
+			glDeleteBuffers(1, &_data[3]);
+			glDeleteBuffers(1, &_data[4]);
+			_np = _nt = 0;
 			_mutex_cond.lock();
 			_cond_renderer.notify_one();
 			if(_mode == 0) _cond_main.wait(_mutex_cond);

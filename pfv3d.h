@@ -44,7 +44,7 @@ struct Triangle
 
 #include "pfv3d_display.h"
 
-class pfv3d
+struct pfv3d
 {
 	#define DMAX std::numeric_limits<double>::max()
 	#define DMIN std::numeric_limits<double>::lowest()
@@ -168,7 +168,7 @@ class pfv3d
 
 	/* === Compute the facets of the frontier === */
 	private: template<typename T>
-	void verify_limits (T &points, T &vertices, int index, double limits[3][2], double extremes[3])
+	void verify_limits (T &points, T &rem, _Map_PTs &p_to_ts, T &vertices, int index, double limits[3][2], double extremes[3])
 	{
 		/* Get new limits */
 		for(typename T::iterator it = points.begin(); it != points.end(); ++it)
@@ -188,10 +188,7 @@ class pfv3d
 			typename T::reverse_iterator it;
 			/* Remove points marked for removal that are beyond the new limits */
 			for(it = points.rbegin(); it != points.rend() && (*it)->_state == -1; it = points.rbegin()) {
-				del_triangles(*it, _p_to_ts_0); del_triangles(*it, _p_to_ts_1); del_triangles(*it, _p_to_ts_2);
-				_points_0.erase(*it); _points_1.erase(*it); _points_2.erase(*it);
-				_rem_0.erase(*it); _rem_1.erase(*it); _rem_2.erase(*it);
-				delete *it;
+				del_triangles(*it, p_to_ts); rem.erase(*it); points.erase(*it);
 			}
 			/* Translate vertices that are beyond the old limits to the new extremes */
 			for(it = vertices.rbegin(); it != vertices.rend() && (*it)->_x[index] > _limits[index][1]; ++it)
@@ -213,9 +210,19 @@ class pfv3d
 		
 		/* Update limits and compute extremes (to be used by sentinels) */
 		double limits[3][2] = {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}}, extremes[2];
-		verify_limits<_Tree_P0>(_points_0, _vertices_0, 0, limits, extremes);
-		verify_limits<_Tree_P1>(_points_1, _vertices_1, 1, limits, extremes);
-		verify_limits<_Tree_P2>(_points_2, _vertices_2, 2, limits, extremes);
+		verify_limits<_Tree_P0>(_points_0, _rem_0, _p_to_ts_0, _vertices_0, 0, limits, extremes);
+		verify_limits<_Tree_P1>(_points_1, _rem_1, _p_to_ts_1, _vertices_1, 1, limits, extremes);
+		verify_limits<_Tree_P2>(_points_2, _rem_2, _p_to_ts_2, _vertices_2, 2, limits, extremes);
+
+		/* In case all points have been removed - clean triangles and vertices */
+		if(_points_0.empty()) {
+			_triangles.clear();
+			for(_Tree_P0::iterator it = _vertices_0.begin(); it != _vertices_0.end(); it = _vertices_0.begin()) {
+				delete *it; _vertices_0.erase(it); }
+			_vertices_1.clear(); _vertices_2.clear();
+			if(display_mode == 1 || display_mode == 3) display();
+			return;
+		}
 
 		/* Call each coordinate sweep */
 		_po[0] = 1; _po[1] = 2; _po[2] = 0; sweep<_Tree_P0>(_points_0, _add_0, _rem_0, _p_to_ts_0, extremes);
@@ -230,8 +237,13 @@ class pfv3d
 		/* Remove points marked for removal and clear removal sets */
 		for(_Tree_P0::iterator it = _rem_0.begin(); it != _rem_0.end(); it = _rem_0.begin()) {
 			_points_0.erase(*it); _points_1.erase(*it); _points_2.erase(*it);
-			_rem_0.erase(it); delete *it; }
-		_rem_1.clear(); _rem_2.clear();
+			_rem_1.erase(*it); _rem_2.erase(*it); delete *it; _rem_0.erase(it); }
+		for(_Tree_P1::iterator it = _rem_1.begin(); it != _rem_1.end(); it = _rem_1.begin()) {
+			_points_0.erase(*it); _points_1.erase(*it); _points_2.erase(*it);
+			_rem_0.erase(*it); _rem_2.erase(*it); delete *it; _rem_1.erase(it); }
+		for(_Tree_P2::iterator it = _rem_2.begin(); it != _rem_2.end(); it = _rem_2.begin()) {
+			_points_0.erase(*it); _points_1.erase(*it); _points_2.erase(*it);
+			_rem_0.erase(*it); _rem_1.erase(*it); delete *it; _rem_2.erase(it); }
 
 		/* Update state of points marked for addition and clear addition sets */
 		for(_Tree_P0::iterator it = _add_0.begin(); it != _add_0.end(); it = _add_0.begin()) {
@@ -313,14 +325,14 @@ class pfv3d
 		if((*p_it.prev())->_x[_po[1]] <= point->_x[_po[1]])
 			{ _projection.erase(p_it); if(point->_state == 0) printf("ASNEIRA\n"); return; } 
 		/* If point is optimal and marked for removal - update their number in the projection tree */ 
-		else if(point->_state == -1) --rem_in;
+		else if(point->_state == -1) ++rem_in;
 
 		/* Cycle to process dominated points until one that is not dominated is reached */
 		_Tree_Proj::iterator current = p_it.next(), tmp_it;
 		for( ; point->_x[_po[1]] <= (*current)->_x[_po[1]]; current = tmp_it) {
 			tmp_it = current.next();
-			/* Points marked for removal can only remove other points marked for removal and maintained
-			   points can only remove other maintained points */
+			/* Points marked for removal can only remove other points marked for removal and
+			   maintained points can only remove other maintained points */
 			if(point->_state == (*current)->_state) {
 				/* Remove current point from the projection tree */
 				_projection.erase(current);
