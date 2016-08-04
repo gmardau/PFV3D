@@ -57,7 +57,8 @@ class pfv3d
 	typedef std::unordered_multimap<Point *, _List_T::iterator> _Map_PTs;
 
 	/* === Variables === */
-	bool _minmax, _display_i;
+	bool _minmax;
+	int _display_mode;
 	double _limits[3][2];
 	_Tree_P0 _points_0, _add_0, _rem_0, _vertices_0;
 	_Tree_P1 _points_1, _add_1, _rem_1, _vertices_1;
@@ -204,11 +205,11 @@ class pfv3d
 	}
 
 	public:
-	void compute (bool display = 0)
+	void compute (int display_mode = 0)
 	{
 		/* If no action is needed */
-		if(_add_0.empty() && _rem_0.empty()) { /*if(display) display();*/ return; }
-		_display_i = display;
+		if(_add_0.empty() && _rem_0.empty()) { if(display_mode == 1 || display_mode == 3) display(); return; }
+		_display_mode = display_mode;
 		
 		/* Update limits and compute extremes (to be used by sentinels) */
 		double limits[3][2] = {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}}, extremes[2];
@@ -237,7 +238,7 @@ class pfv3d
 			(*it)->_state = 0; _add_0.erase(it); }
 		_add_1.clear(); _add_2.clear();
 
-		// if(display) display();
+		if(display_mode == 1 || display_mode == 3) display();
 	}
 
 	private: template<typename T>
@@ -287,7 +288,7 @@ class pfv3d
 				else	         result = facet_max<T>(it, p_to_ts, saved, add_in, rem_in, special);
 			   	/* Save the point for elimination if it is non optimal */
 				if(result == 0) _non_optimal.insert(_non_optimal.end(), *it);
-				if(_display_i) display_i();
+				if(_display_mode == 2 || _display_mode == 3) display_i();
 			}
 
 			/* Update iterators and number of points to be added or to be removed */

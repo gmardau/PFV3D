@@ -13,8 +13,8 @@ int main(int argc, char const *argv[])
 	}
 	for(int j = 0; j < i; j++){
 		a.add_point(c[j]);}
-		a.compute(1);
-	a.display();
+		a.compute(3);
+	// a.display();
 	// for(int j = 0; j < i; j++) {
 	// 	a.add_point(c[rand()%i]);
 	// 	a.add_point(c[rand()%i]);
