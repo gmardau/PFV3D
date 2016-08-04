@@ -19,8 +19,6 @@
 
 class pfv3d_display
 {
-
-	typedef tree<tree_avl, Point *, point_comp<0,1,2>> _Tree_P0;
 	typedef std::list<Triangle> _List_T;
 
 	/* === Variables === */
@@ -38,7 +36,7 @@ class pfv3d_display
 	/* Display */
 	int _program;
 	glm::vec3 _camera_view = glm::vec3(2, 0, 0), _camera_look = glm::vec3(0, 0, 0), _camera_up = glm::vec3(0, 0, 1);
-	float _radius = 2, _zoom_factor = 1.1;
+	float _radius = 2, _zoom_factor = 1.05;
 	float _r_x = 0, _r_y = 0, _r_z = 0, _r_xy = 0;
 
 	bool _lb_state = 0, _rb_state = 0;
@@ -74,34 +72,43 @@ class pfv3d_display
 		glewInit();
 
 		/* Open GL */
-		glShadeModel(GL_SMOOTH);
-		glEnable(GL_BLEND | GL_ALPHA_TEST | GL_DEPTH_TEST | GL_LINE_SMOOTH | GL_POLYGON_SMOOTH | GL_NORMALIZE);
+		// glShadeModel(GL_SMOOTH);
+		// glEnable(GL_BLEND | GL_ALPHA_TEST | GL_DEPTH_TEST | GL_LINE_SMOOTH | GL_POLYGON_SMOOTH | GL_NORMALIZE);
+		// glEnable(GL_BLEND);
+		glEnable(GL_DEPTH_TEST);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		/* Vertex Shader */
 		const char *vertex_src = "\
-		    #version 330\n\
+			#version 330\n\
 			layout (location = 0) in vec3 position;\
+			layout (location = 1) in vec3 v_normal;\
 			uniform mat4 model;\
 			uniform mat4 view;\
 			uniform mat4 projection;\
-		    void main() {\
-		    	gl_Position = projection * view * model * vec4(position, 1.0);\
-		    }";
+			out vec3 f_normal;\
+			void main() {\
+				f_normal = v_normal;\
+				gl_Position = projection * view * model * vec4(position, 1.0);\
+			}";
 		int vertex_shader = glCreateShader(GL_VERTEX_SHADER);
 		glShaderSource(vertex_shader, 1, (const GLchar**)&vertex_src, NULL);
 		glCompileShader(vertex_shader);
 
 		/* Fragment Shader */
 		const char *fragment_src = "\
-		    #version 330\n\
-			out vec4 colour;\
+			#version 330\n\
+			in vec3 f_normal;\
 			uniform vec4 light_colour;\
 			uniform vec4 object_colour;\
-	        void main(){\
-	        	vec4 ambient = 1.0f * light_colour;\
-	        	colour = (ambient) * object_colour;\
-	        }";
+			out vec4 colour;\
+			void main(){\
+				vec4 ambient = 0.1f * light_colour;\
+				vec3 direction = normalize(vec3(1, 2, 3));\
+				float diff = max(dot(normalize(f_normal), direction), 0.0);\
+				vec4 diffuse = diff * light_colour;\
+				colour = (ambient + diffuse) * object_colour;\
+			}";
 		int fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
 		glShaderSource(fragment_shader, 1, (const GLchar**)&fragment_src, NULL);
 		glCompileShader(fragment_shader);
@@ -150,7 +157,7 @@ class pfv3d_display
 
 	/* === Activate frontier display === */
 	public:
-	void display_frontier (bool mode, _Tree_P0 &points, _Tree_P0 &vertices, _List_T &triangles)
+	void display_frontier (bool mode, int np, _List_T &triangles)
 	{
 		if(triangles.empty()) {
 			_mutex_cond.lock();
@@ -161,32 +168,26 @@ class pfv3d_display
 		}
 		
 		size_t size_indices = triangles.size()*3*sizeof(int);
-		size_t size_coord = (points.size()+vertices.size())*3*sizeof(double);
-		int i = 0, *indices = (int*) malloc(size_indices);
-		double *coord = (double*) malloc(size_coord);
+		size_t size_vertices = triangles.size()*3*3*2*sizeof(double);
+		int v = 0, t = 0, *indices = (int*) malloc(size_indices);
+		double *vertices = (double*) malloc(size_vertices);
+		double normal[3];
 
 		/* Get data */
-		for(_Tree_P0::iterator it = points.begin(); it != points.end(); ++it) {
-			(*it)->_did = i/3;
-			coord[i++] = (*it)->_x[0];
-			coord[i++] = (*it)->_x[1];
-			coord[i++] = (*it)->_x[2];
-		}
-		for(_Tree_P0::iterator it = vertices.begin(); it != vertices.end(); ++it) {
-			(*it)->_did = i/3;
-			coord[i++] = (*it)->_x[0];
-			coord[i++] = (*it)->_x[1];
-			coord[i++] = (*it)->_x[2];
-		}
-		i = 0;
 		for(_List_T::iterator it = triangles.begin(); it != triangles.end(); ++it) {
-			indices[i++] = it->_v[0]->_did;
-			indices[i++] = it->_v[1]->_did;
-			indices[i++] = it->_v[2]->_did;
+			normal[0] = normal[1] = normal[2] = 0;
+			     if(it->_v[0]->_x[0] == it->_v[1]->_x[0] && it->_v[0]->_x[0] == it->_v[2]->_x[0]) normal[0] = 1;
+			else if(it->_v[0]->_x[1] == it->_v[1]->_x[1] && it->_v[0]->_x[1] == it->_v[2]->_x[1]) normal[1] = 1;
+			else                                                                                  normal[2] = 1;
+			for(int i = 0; i < 3; ++i) {
+				vertices[v++] = it->_v[i]->_x[0]; vertices[v++] = it->_v[i]->_x[1]; vertices[v++] = it->_v[i]->_x[2];
+				vertices[v++] = normal[0]; vertices[v++] = normal[1]; vertices[v++] = normal[2];
+			}
+			indices[t] = t; ++t; indices[t] = t; ++t; indices[t] = t; ++t;
 		}
 
 		// int indices[6] = {0, 1, 2, 2, 3, 4};
-		// double coord[15] = {0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1};
+		// double vertices[15] = {0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1};
 
 		_mutex_data.lock();
 
@@ -203,18 +204,20 @@ class pfv3d_display
 		glGenBuffers(1, &_data[4]);
 		glBindVertexArray(_data[2]);
 		glBindBuffer(GL_ARRAY_BUFFER, _data[3]);
-		glBufferData(GL_ARRAY_BUFFER, size_coord, coord, GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, size_vertices, vertices, GL_STATIC_DRAW);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[4]);
 	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_indices, indices, GL_STATIC_DRAW);
-		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 3*sizeof(double), (GLvoid*)0);
+		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)0);
 		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(1, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)(3*sizeof(double)));
+		glEnableVertexAttribArray(1);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindVertexArray(0);
 
 		_mutex_data.unlock();
 
 		_data[0] = 1; _data[1] = triangles.size()*3;
-		_np = points.size(); _nt = triangles.size();
+		_np = np; _nt = triangles.size();
 		_mode = mode;
 		// colours[o] = colour;
 
@@ -223,7 +226,7 @@ class pfv3d_display
 		if(_mode == 0) _cond_main.wait(_mutex_cond);
 		_mutex_cond.unlock();
 
-		free(indices); free(coord);
+		free(indices); free(vertices);
 	}
 	/* === Activate frontier display === */
 
@@ -294,18 +297,26 @@ class pfv3d_display
 		glUniformMatrix4fv(      view_location, 1, GL_FALSE, &view[0][0]);
 		glUniformMatrix4fv(projection_location, 1, GL_FALSE, &projection[0][0]);
 
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		/* Object Colour */
 		int object_colour_location = glGetUniformLocation(_program, "object_colour");
-		glUniform4f(object_colour_location, 0.1, 0.2, 0.8, 1);
+		glUniform4f(object_colour_location, 0.1, 1, 0.2, 1);
 		/* Light Colour */
 		int light_colour_location = glGetUniformLocation(_program, "light_colour");
 		glUniform4f(light_colour_location, 1, 1, 1, 1);
 
 		/* Draw Triangles */
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		glBindVertexArray(_data[2]);
 		glDrawElements(GL_TRIANGLES, _data[1], GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
+
+		// object_colour_location = glGetUniformLocation(_program, "object_colour");
+		// glUniform4f(object_colour_location, 1, 1, 1, 1);
+		// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		// glLineWidth(3);
+		// glBindVertexArray(_data[2]);
+		// glDrawElements(GL_TRIANGLES, _data[1], GL_UNSIGNED_INT, 0);
+		// glBindVertexArray(0);
 
 		glUseProgram(0);
 		SDL_GL_SwapWindow(_window);
@@ -351,8 +362,9 @@ class pfv3d_display
 			case SDL_MOUSEWHEEL:
 				if(button->x == 1) _radius /= _zoom_factor;
 				else if(button->x == -1) _radius *= _zoom_factor;
-				_camera_view[0] = cos(_r_z) * _radius;
-				_camera_view[1] = sin(_r_z) * _radius;
+				_camera_view[2] = sin(_r_xy) * _radius;
+				_camera_view[0] = cos(_r_z) * cos(_r_xy) * _radius;
+				_camera_view[1] = sin(_r_z) * cos(_r_xy) * _radius;
 				break;
 		}
 	}

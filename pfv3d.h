@@ -11,7 +11,7 @@
 struct Point
 {
 	bool _optimal;
-	mutable int _did, _state, _n_tri;
+	int _state, _n_tri;
 	double _x[3];
 	Point (double x1, double x2, double x3, bool optimal = 0) : _optimal(optimal), _state(1), _n_tri(0), _x{x1, x2, x3} {}
 	Point (double *x, bool optimal = 0) : _optimal(optimal), _state(1), _n_tri(0), _x{x[0], x[1], x[2]} {}
@@ -99,9 +99,9 @@ class pfv3d
 
 	/* === Call the visualiser === */
 	public:
-	void display () { _display.display_frontier(0, _points_0, _vertices_0, _triangles); }
+	void display () { _display.display_frontier(0, _points_0.size(), _triangles); }
 	private:
-	void display_i () { _display.display_frontier(1, _points_0, _vertices_0, _triangles); /*usleep(10000);*/ }
+	void display_i () { _display.display_frontier(1, _points_0.size(), _triangles); /*usleep(10000);*/ }
 	/* === Call the visualiser === */
 
 	/* === Add points to the frontier === */
@@ -176,37 +176,38 @@ class pfv3d
 			if((*it)->_state != -1) { limits[index][1] = (*it)->_x[index]; break; }
 
 		/* Compute extremes based on the new limits */
-		double range = limits[index][1] - limits[index][1];
+		double range = limits[index][1] - limits[index][0];
 		if(_minmax == 0) extremes[index] = limits[index][1] + (range == 0 ? 1 : range * 0.1);
 		else             extremes[index] = limits[index][0] - (range == 0 ? 1 : range * 0.1);
 
-		/* Check if limits have changed */
-		bool new_limits = 0;
-		if(_limits[index][0] != limits[index][0]) { _limits[index][0] = limits[index][0]; new_limits = 1; }
-		if(_limits[index][1] != limits[index][1]) { _limits[index][1] = limits[index][1]; new_limits = 1; }
-		/* If not - exit function */
-		if(new_limits == 0) return;
-		/* If yes - remove points marked for removal that are beyond the new limits and translate the extremes */
+		/* If the limits have not changed - exit function */
+		if(_limits[index][0] == limits[index][0] && _limits[index][1] == limits[index][1]) return;
+		/* If they did - update surface */
 		if(_minmax == 0) {
 			typename T::reverse_iterator it;
+			/* Remove points marked for removal that are beyond the new limits */
 			for(it = points.rbegin(); it != points.rend() && (*it)->_state == -1; it = points.rbegin()) {
 				del_triangles(*it, _p_to_ts_0); del_triangles(*it, _p_to_ts_1); del_triangles(*it, _p_to_ts_2);
 				_points_0.erase(*it); _points_1.erase(*it); _points_2.erase(*it);
 				_rem_0.erase(*it); _rem_1.erase(*it); _rem_2.erase(*it);
 				delete *it;
 			}
-			for(it = vertices.rbegin(); it != vertices.rend() && (*it)->_x[index] > limits[index][1]; ++it)
+			/* Translate vertices that are beyond the old limits to the new extremes */
+			for(it = vertices.rbegin(); it != vertices.rend() && (*it)->_x[index] > _limits[index][1]; ++it)
 				(*it)->_x[index] = extremes[index];
 		} else {
 
 		}
+
+		/* Update limits */
+		_limits[index][0] = limits[index][0]; _limits[index][1] = limits[index][1];
 	}
 
 	public:
 	void compute (bool display = 0)
 	{
 		/* If no action is needed */
-		if(_add_0.empty() && _rem_0.empty()) { /*if(display) this->display();*/ return; }
+		if(_add_0.empty() && _rem_0.empty()) { /*if(display) display();*/ return; }
 		_display_i = display;
 		
 		/* Update limits and compute extremes (to be used by sentinels) */
@@ -236,7 +237,7 @@ class pfv3d
 			(*it)->_state = 0; _add_0.erase(it); }
 		_add_1.clear(); _add_2.clear();
 
-		// if(display) this->display();
+		// if(display) display();
 	}
 
 	private: template<typename T>
@@ -253,35 +254,40 @@ class pfv3d
 		sentinels[0]->_state = sentinels[1]->_state = 0; // TALVEZ NAO SEJA PRECISO
 
 		/* Perform the sweep */
-		bool redo, result;
+		bool redo, special = 0, result;
 		int to_add = add.size(), to_rem = rem.size(), add_in = 0, rem_in = 0;
-		Point *same_coord = nullptr;
+		Point *saved = nullptr;
 		typename T::iterator it_add = add.begin(), it_rem = rem.begin();
 
 		for(typename T::iterator it = points.begin(); it != points.end() &&
-		   (to_add > 0 || to_rem > 0 || add_in > 0 || rem_in > 0); ++it) {
+		   (to_add > 0 || to_rem > 0 || add_in > 0 || rem_in > 0 || saved != nullptr || special == 1); ++it) {
 
 			// Se for ponto para remover - apenas por na arvore
+			// Se for ponto para adicionar - refazer
 			// Se ainda houver pontos adicionados ou removidos na arvore - refazer
-			// Se same_coord nao estiver a null - refazer
-			// Se for ponto para adicionar ou se tiver a mesma coordenada de ponto para adicionar - refazer
+			// Se saved nao estiver a null - refazer
+			// Se tiver a mesma coordenada de ponto para adicionar - refazer
 			// Se tiver mesma coordenada de ponto para remover - refazer
+			// Se for o caso especial onde um ponto novo corta o caso de coordenadas repetidas (saved) - refazer
 			// Nenhum dos anteriores - apenas por na arvore
 
 			if((*it)->_state == -1) redo = 0;
-			else if(add_in > 0 || rem_in > 0 || same_coord != nullptr) redo = 1;
+			else if((*it)->_state == 1) redo = 1;
+			else if(add_in > 0 || rem_in > 0 || saved != nullptr) redo = 1;
 			else if(to_add > 0 && (*it)->_x[_po[2]] == (*it_add)->_x[_po[2]]) redo = 1;
 			else if(to_rem > 0 && (*it)->_x[_po[2]] == (*it_rem)->_x[_po[2]]) redo = 1;
+			else if(special == 1) { special = 0; redo = 1; }
 			else redo = 0;
 
 			if(redo == 0) {
-				if(_minmax == 0) insert_only_min(*it, rem_in, p_to_ts);
-				else             insert_only_max(*it, rem_in, p_to_ts);
+				if(_minmax == 0) insert_only_min(*it, p_to_ts, rem_in);
+				else             insert_only_max(*it, p_to_ts, rem_in);
 			} else {
-				if(_minmax == 0) result = facet_min<T>(it, same_coord, add_in, rem_in, p_to_ts);
-				else	         result = facet_max<T>(it, same_coord, add_in, rem_in, p_to_ts);
+				if(_minmax == 0) result = facet_min<T>(it, p_to_ts, saved, add_in, rem_in, special);
+				else	         result = facet_max<T>(it, p_to_ts, saved, add_in, rem_in, special);
 			   	/* Save the point for elimination if it is non optimal */
 				if(result == 0) _non_optimal.insert(_non_optimal.end(), *it);
+				if(_display_i) display_i();
 			}
 
 			/* Update iterators and number of points to be added or to be removed */
@@ -295,7 +301,7 @@ class pfv3d
 	}
 
 	private:
-	void insert_only_min (Point *point, int &rem_in, _Map_PTs &p_to_ts)
+	void insert_only_min (Point *point, _Map_PTs &p_to_ts, int &rem_in)
 	{
 		/* If point is marked for removal - remove triangles previously created by it */
 		if(point->_state == -1) del_triangles(point, p_to_ts);
@@ -324,7 +330,7 @@ class pfv3d
 	}
 
 	private: template<typename T>
-	bool facet_min (typename T::iterator &p, Point *&same_coord, int &add_in, int &rem_in, _Map_PTs &p_to_ts)
+	bool facet_min (typename T::iterator &p, _Map_PTs &p_to_ts, Point *&saved, int &add_in, int &rem_in, bool &special)
 	{
 		Point *point = *p;
 
@@ -374,7 +380,7 @@ class pfv3d
 
 			/* If the previous point called into this function has the same coordinate as the
 			   current one - recover saved vertex 2 */
-			if(same_coord != nullptr) vertices[1] = same_coord;
+			if(saved != nullptr) vertices[1] = saved;
 			/* If does not - create vertex 2 */
 			else vertices[1] = add_vertex((*current)->_x[_po[0]], vertices[0]->_x[_po[1]], point->_x[_po[2]]);
 
@@ -389,7 +395,7 @@ class pfv3d
 			add_triangle(*p_it, vertices[0], *p_it, vertices[2], p_to_ts);
 
 			/* There is no case of same coordinate, analysed only after cycle, when ending this function */
-			same_coord = nullptr;
+			saved = nullptr;
 
 			/* Remove current point from the projection tree (it is fully dominated) */
 			tmp_it = current.next();
@@ -410,16 +416,20 @@ class pfv3d
 			/* Create vertex 3 */
 			vertices[2] = add_vertex((*tmp2_it)->_x[_po[0]], point->_x[_po[1]], point->_x[_po[2]]);
 			/* Save vertex 2 for next function */
-			same_coord = vertices[1];
+			saved = vertices[1];
 		}
 		/* The case of same coordinate does not occur (default case) */
 		else {
 			/* Create vertex 3 */
 			vertices[2] = add_vertex((*current)->_x[_po[0]], point->_x[_po[1]], point->_x[_po[2]]);
 			/* There is no case of same coordinate */
-			same_coord = nullptr;	
+			saved = nullptr;	
 			/* If intersected point is partially dominated - remove it from the representation tree */
 			if((*current)->_x[_po[1]] == point->_x[_po[1]]) {
+				/* If intersected point was marked for addition and breaks case of same coord */
+				if((*current)->_state == 1 && tmp2_it.info() != nullptr && point->_x[_po[2]] == (*tmp2_it)->_x[_po[2]]
+				   && (*tmp2_it)->_x[_po[1]] < point->_x[_po[1]]) special = 1;
+
 				/* If it was a point marked for addition - update their number i\n the projection tree */
 				if((*current)->_state == 1) --add_in;
 				_projection.erase(current);
@@ -434,13 +444,13 @@ class pfv3d
 	}
 
 	private:
-	void insert_only_max (Point *point, int &rem_in, _Map_PTs &p_to_ts)
+	void insert_only_max (Point *point, _Map_PTs &p_to_ts, int &rem_in)
 	{
 		
 	}
 
 	private: template<typename T>
-	bool facet_max (typename T::iterator &p, Point *&same_coord, int &add_in, int &rem_in, _Map_PTs &p_to_ts)
+	bool facet_max (typename T::iterator &p, _Map_PTs &p_to_ts, Point *&saved, int &add_in, int &rem_in, bool &special)
 	{
 		return 1;
 	}
@@ -465,7 +475,6 @@ class pfv3d
 	void add_triangle(Point *p, Point *p1, Point *p2, Point *p3, _Map_PTs &p_to_ts)
 	{
 		p_to_ts.insert({p, _triangles.insert(_triangles.end(), Triangle(p1, p2, p3))});
-		if(_display_i) display_i();
 	}
 	/* === Add triangle === */
 
@@ -477,13 +486,10 @@ class pfv3d
 		auto range = p_to_ts.equal_range(point);
 		for(auto it = range.first; it != range.second; ++it) {
 			t = &*(*it).second;
-			for(int i = 0; i < 3; i++) {
-				--t->_v[i]->_n_tri;
-				if(t->_v[i]->_n_tri == 0 && t->_v[i]->_optimal == 0) {
+			for(int i = 0; i < 3; i++)
+				if(--t->_v[i]->_n_tri == 0 && t->_v[i]->_optimal == 0) {
 					_vertices_0.erase(t->_v[i]); _vertices_1.erase(t->_v[i]); _vertices_2.erase(t->_v[i]);
-					delete t->_v[i];
-				}
-			}
+					delete t->_v[i]; }
 			_triangles.erase((*it).second);
 		}
 		p_to_ts.erase(point);
