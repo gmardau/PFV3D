@@ -167,6 +167,7 @@ class pfv3d_display
 			glDeleteBuffers(1, &_data[3]);
 			glDeleteBuffers(1, &_data[4]);
 			_np = _nt = 0;
+			_mode = mode;
 			_mutex_cond.lock();
 			_cond_renderer.notify_one();
 			if(_mode == 0) _cond_main.wait(_mutex_cond);
