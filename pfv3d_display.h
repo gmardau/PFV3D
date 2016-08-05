@@ -151,7 +151,10 @@ class pfv3d_display
 	private:
 	void display_clear ()
 	{
-
+		_data[0] = _data[1] = 0;
+		glDeleteVertexArrays(1, &_data[2]);
+		glDeleteBuffers(1, &_data[3]);
+		glDeleteBuffers(1, &_data[4]);
 	}
 	/* === Clear display variables and objects data === */
 

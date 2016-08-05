@@ -34,11 +34,7 @@ bool proj_comp(const Point* p1, const Point* p2) {
 struct Triangle
 {
 	Point *_v[3];
-	public:
-	Triangle (Point *v1, Point *v2, Point *v3) : _v{v1, v2, v3}
-	{
-		for(int i = 0; i < 3; ++i) ++_v[i]->_n_tri;
-	}
+	Triangle (Point *v1, Point *v2, Point *v3) : _v{v1, v2, v3} {}
 	~Triangle () {}
 };
 
@@ -73,7 +69,7 @@ struct pfv3d
 	/* === Constructor/Destructor === */
 	public:
 	pfv3d () : pfv3d(0) {}
-	pfv3d (bool minmax) : _minmax(minmax), _limits{{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}} {}
+	pfv3d (bool minmax) : _minmax(minmax), _limits{{DMIN, DMAX}, {DMIN, DMAX}, {DMIN, DMAX}} {}
 	~pfv3d ()
 	{
 
@@ -86,15 +82,15 @@ struct pfv3d
 	{
 		if(_minmax == 0) return;
 		_minmax = 1;
-		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMAX;
-		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMIN;
+		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
+		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
 	}
 	void maximise ()
 	{
 		if(_minmax == 1) return;
 		_minmax = 0;
-		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMAX;
-		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMIN;
+		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
+		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
 	}
 	/* === Define the optimisation orientation === */
 
@@ -120,17 +116,14 @@ struct pfv3d
 				/* If it was marked for removal, restore it */
 				if(p->_state == -1) {
 					p->_state = 0;
-					_rem_0.erase(p);
-					_rem_1.erase(p);
-					_rem_2.erase(p);
+					_rem_0.erase(p); _rem_1.erase(p); _rem_2.erase(p);
 				}
 				delete tmp;
 			}
 			/* If it is a new point */
 			else {
-				_add_0.insert(p);
-				_add_1.insert(p); _points_1.insert(p);
-				_add_2.insert(p); _points_2.insert(p);
+				_add_0.insert(p); _add_1.insert(p); _add_2.insert(p);
+				_points_1.insert(p); _points_2.insert(p);
 			}
 		}
 	}
@@ -150,17 +143,14 @@ struct pfv3d
 			if(p == *_points_0.end()) continue;
 			/* If it was yet to be added, remove it */
 			if(p->_state == 1) {
-				_add_0.erase(p); _points_0.erase(p); 
-				_add_1.erase(p); _points_1.erase(p); 
-				_add_2.erase(p); _points_2.erase(p);
+				_add_0.erase(p); _add_1.erase(p); _add_2.erase(p);
+				_points_0.erase(p); _points_1.erase(p); _points_2.erase(p);
 				delete p;
 			} 
 			/* If not, mark it for removal */
 			else if(p->_state == 0) {
 				p->_state = -1;
-				_rem_0.insert(p);
-				_rem_1.insert(p);
-				_rem_2.insert(p);
+				_rem_0.insert(p); _rem_1.insert(p); _rem_2.insert(p);
 			}
 		}
 	}
@@ -187,9 +177,10 @@ struct pfv3d
 		if(_minmax == 0) {
 			typename T::reverse_iterator it;
 			/* Remove points marked for removal that are beyond the new limits */
-			for(it = points.rbegin(); it != points.rend() && (*it)->_state == -1; it = points.rbegin()) {
-				del_triangles(*it, p_to_ts); rem.erase(*it); points.erase(*it);
-			}
+			for(it = points.rbegin(); it != points.rend() && (*it)->_state != 0; ) {
+				if((*it)->_state == -1) {
+					del_triangles(*it, p_to_ts); rem.erase(*it); points.erase(*it); it = points.rbegin();
+				} else ++it; }
 			/* Translate vertices that are beyond the old limits to the new extremes */
 			for(it = vertices.rbegin(); it != vertices.rend() && (*it)->_x[index] > _limits[index][1]; ++it)
 				(*it)->_x[index] = extremes[index];
@@ -209,7 +200,7 @@ struct pfv3d
 		_display_mode = display_mode;
 		
 		/* Update limits and compute extremes (to be used by sentinels) */
-		double limits[3][2] = {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}}, extremes[2];
+		double limits[3][2] = {{DMIN, DMAX}, {DMIN, DMAX}, {DMIN, DMAX}}, extremes[2];
 		verify_limits<_Tree_P0>(_points_0, _rem_0, _p_to_ts_0, _vertices_0, 0, limits, extremes);
 		verify_limits<_Tree_P1>(_points_1, _rem_1, _p_to_ts_1, _vertices_1, 1, limits, extremes);
 		verify_limits<_Tree_P2>(_points_2, _rem_2, _p_to_ts_2, _vertices_2, 2, limits, extremes);
@@ -226,8 +217,8 @@ struct pfv3d
 
 		/* Call each coordinate sweep */
 		_po[0] = 1; _po[1] = 2; _po[2] = 0; sweep<_Tree_P0>(_points_0, _add_0, _rem_0, _p_to_ts_0, extremes);
-		_po[0] = 2; _po[1] = 0; _po[2] = 1;	sweep<_Tree_P1>(_points_1, _add_1, _rem_1, _p_to_ts_1, extremes);
-		_po[0] = 0; _po[1] = 1; _po[2] = 2;	sweep<_Tree_P2>(_points_2, _add_2, _rem_2, _p_to_ts_2, extremes);
+		// _po[0] = 2; _po[1] = 0; _po[2] = 1;	sweep<_Tree_P1>(_points_1, _add_1, _rem_1, _p_to_ts_1, extremes);
+		// _po[0] = 0; _po[1] = 1; _po[2] = 2;	sweep<_Tree_P2>(_points_2, _add_2, _rem_2, _p_to_ts_2, extremes);
 
 		/* Remove non optimal points */
 		for(_List_P::iterator it = _non_optimal.begin(); it != _non_optimal.end(); it = _non_optimal.begin()) {
@@ -401,7 +392,7 @@ struct pfv3d
 			if((*current)->_x[_po[1]] <= point->_x[_po[1]]) break;
 
 			/* Create vertex 3 */
-			vertices[2] = add_vertex((*current)->_x[_po[0]], (*current)->_x[_po[1]], point->_x[_po[2]]) ;
+			vertices[2] = add_vertex((*current)->_x[_po[0]], (*current)->_x[_po[1]], point->_x[_po[2]]);
 
 			/* Add triangles 103 and 123 (being 0 the point called into this function) */
 			add_triangle(*p_it, vertices[0], vertices[1], vertices[2], p_to_ts);
@@ -488,6 +479,7 @@ struct pfv3d
 	void add_triangle(Point *p, Point *p1, Point *p2, Point *p3, _Map_PTs &p_to_ts)
 	{
 		p_to_ts.insert({p, _triangles.insert(_triangles.end(), Triangle(p1, p2, p3))});
+		++p1->_n_tri; ++p2->_n_tri; ++p3->_n_tri;
 	}
 	/* === Add triangle === */
 
