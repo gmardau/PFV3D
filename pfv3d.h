@@ -217,8 +217,8 @@ struct pfv3d
 
 		/* Call each coordinate sweep */
 		_po[0] = 1; _po[1] = 2; _po[2] = 0; sweep<_Tree_P0>(_points_0, _add_0, _rem_0, _p_to_ts_0, extremes);
-		// _po[0] = 2; _po[1] = 0; _po[2] = 1;	sweep<_Tree_P1>(_points_1, _add_1, _rem_1, _p_to_ts_1, extremes);
-		// _po[0] = 0; _po[1] = 1; _po[2] = 2;	sweep<_Tree_P2>(_points_2, _add_2, _rem_2, _p_to_ts_2, extremes);
+		_po[0] = 2; _po[1] = 0; _po[2] = 1;	sweep<_Tree_P1>(_points_1, _add_1, _rem_1, _p_to_ts_1, extremes);
+		_po[0] = 0; _po[1] = 1; _po[2] = 2;	sweep<_Tree_P2>(_points_2, _add_2, _rem_2, _p_to_ts_2, extremes);
 
 		/* Remove non optimal points */
 		for(_List_P::iterator it = _non_optimal.begin(); it != _non_optimal.end(); it = _non_optimal.begin()) {
