@@ -17,7 +17,7 @@ struct Point
 	Point (double *x, bool optimal = 0) : _optimal(optimal), _state(1), _n_tri(0), _x{x[0], x[1], x[2]} {}
 };
 /* === Point compare function === */
-template<int x1, int x2, int x3> struct point_comp {
+template<int x1, int x2, int x3> struct point_comparison {
 	bool operator()(const Point *p1, const Point *p2) {
 		if(p1->_x[x1] < p2->_x[x1]) return 1;; if(p1->_x[x1] > p2->_x[x1]) return 0;
 		if(p1->_x[x2] < p2->_x[x2]) return 1;; if(p1->_x[x2] > p2->_x[x2]) return 0;
@@ -25,7 +25,7 @@ template<int x1, int x2, int x3> struct point_comp {
 /* === Point compare function === */
 /* === Projection compare function === */
 int _po[3];
-bool proj_comp(const Point* p1, const Point* p2) {
+bool projection_comparison(const Point* p1, const Point* p2) {
 	if(p1->_x[_po[0]] < p2->_x[_po[0]]) return 1;; if(p1->_x[_po[0]] > p2->_x[_po[0]]) return 0;
 	if(p1->_x[_po[1]] < p2->_x[_po[1]]) return 1;; if(p1->_x[_po[1]] > p2->_x[_po[1]]) return 0;
 	if(p1->_x[_po[2]] < p2->_x[_po[2]]) return 1;; return 0; }
@@ -44,10 +44,10 @@ struct pfv3d
 {
 	#define DMAX std::numeric_limits<double>::max()
 	#define DMIN std::numeric_limits<double>::lowest()
-	typedef tree<tree_avl, Point *, point_comp<0,1,2>> _Tree_P0;
-	typedef tree<tree_avl, Point *, point_comp<1,2,0>> _Tree_P1;
-	typedef tree<tree_avl, Point *, point_comp<2,0,1>> _Tree_P2;
-	typedef tree<tree_avl, Point *, decltype(&proj_comp)> _Tree_Proj;
+	typedef tree<tree_avl, Point *, point_comparison<0,1,2>> _Tree_P0;
+	typedef tree<tree_avl, Point *, point_comparison<1,2,0>> _Tree_P1;
+	typedef tree<tree_avl, Point *, point_comparison<2,0,1>> _Tree_P2;
+	typedef tree<tree_avl, Point *, decltype(&projection_comparison)> _Tree_Proj;
 	typedef std::list<Point *> _List_P;
 	typedef std::list<Triangle> _List_T;
 	typedef std::unordered_multimap<Point *, _List_T::iterator> _Map_PTs;
@@ -59,7 +59,7 @@ struct pfv3d
 	_Tree_P0 _points_0, _add_0, _rem_0, _vertices_0;
 	_Tree_P1 _points_1, _add_1, _rem_1, _vertices_1;
 	_Tree_P2 _points_2, _add_2, _rem_2, _vertices_2;
-	_Tree_Proj _projection = _Tree_Proj(&proj_comp);
+	_Tree_Proj _projection = _Tree_Proj(&projection_comparison);
 	_List_P _non_optimal;
 	_List_T _triangles;
 	_Map_PTs _p_to_ts_0, _p_to_ts_1, _p_to_ts_2;
@@ -76,7 +76,8 @@ struct pfv3d
 	}
 	~pfv3d ()
 	{
-
+		for(_Tree_P0::iterator it =   _points_0.begin(); !it.is_sentinel(); ++it) delete *it;
+		for(_Tree_P0::iterator it = _vertices_0.begin(); !it.is_sentinel(); ++it) delete *it;
 	}
 	/* === Constructor/Destructor === */
 
@@ -89,6 +90,7 @@ struct pfv3d
 		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
 		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
 		_extremes[0] = _extremes[1] = _extremes[2] = DMAX;
+		clear_frontier();
 	}
 	void maximise ()
 	{
@@ -97,14 +99,39 @@ struct pfv3d
 		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
 		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
 		_extremes[0] = _extremes[1] = _extremes[2] = DMIN;
+		clear_frontier();
 	}
 	/* === Define the optimisation orientation === */
+
+	/* === Clear frontier === */
+	private:
+	void clear_frontier ()
+	{
+		_Tree_P0::iterator it;
+		Point *p;
+		for(it = _points_0.begin(); !it.is_sentinel(); ) {
+			p = (*it); ++it;
+			if(p->_state == 0) {
+				p->_state = 1;
+				_add_0.insert(p); _add_1.insert(p); _add_2.insert(p);
+			} else if(p->_state == -1) {
+				_points_0.erase(p); _points_1.erase(p); _points_2.erase(p);
+				delete p;
+			}
+		}
+		_rem_0.clear(); _rem_1.clear(); _rem_2.clear();
+		for(it = _vertices_0.begin(); !it.is_sentinel(); ++it) delete *it;
+		_vertices_0.clear(); _vertices_1.clear(); _vertices_2.clear();
+		_p_to_ts_0.clear(); _p_to_ts_1.clear(); _p_to_ts_2.clear();
+		_triangles.clear();
+	}
+	/* === Clear frontier === */
 
 	/* === Call the visualiser === */
 	public:
 	void display () { _display.display_frontier(0, _points_0.size(), _triangles); }
 	private:
-	void display_i () { _display.display_frontier(1, _points_0.size(), _triangles); /*usleep(10000);*/ }
+	void display_i () { _display.display_frontier(1, _points_0.size(), _triangles); }
 	/* === Call the visualiser === */
 
 	/* === Add points to the frontier === */
@@ -181,17 +208,19 @@ struct pfv3d
 
 		/* If the limits have not changed - exit function */
 		if(_limits[index][0] == limits[0] && _limits[index][1] == limits[1]) return;
-		/* If they did - update surface */
+		/* If they did - update surface extremes */
 		if(_minmax == 0) {
-			typename T::reverse_iterator it;
 			Point *p;
+			typename T::reverse_iterator it;
 			/* Remove points marked for removal that are beyond the new limits */
 			for(it = points.rbegin(); !it.is_sentinel() && (*it)->_state != 0; ) {
 				if((*it)->_state == -1) { p = *it;
 					/* If next point has same coordinate - maintain removing point to force facet recomputation */
 					if(it.has_next() && p->_x[index] == (*it.next())->_x[index] && (*it.next())->_state == 0) break;
 					/* Remove triangles created by the point and remove it from points and removal sets */
-					del_triangles(*it, p_to_ts); rem.erase(*it); points.erase(*it);
+					// del_triangles(*it, _p_to_ts_0); del_triangles(*it, _p_to_ts_1); del_triangles(*it, _p_to_ts_2);
+					del_triangles(*it, p_to_ts);
+					rem.erase(*it); points.erase(*it);
 					/* If point would be beyond the new extreme - pull it back inside between the extreme and the limit */
 					if(p->_x[index] >= extreme) p->_x[index] = (extreme + limits[index]) / 2;
 					it = points.rbegin();
@@ -222,15 +251,17 @@ struct pfv3d
 	{
 		/* If no action is needed */
 		if(_add_0.empty() && _rem_0.empty()) { if(display_mode == 1 || display_mode == 3) display(); return; }
+
+		/* If all points from the previous computation are to be removed - clear frontier */
+		if(_points_0.size() == _add_0.size() + _rem_0.size() && _rem_0.size() > 0) clear_frontier();
+		/* In case all points have been removed - no action is needed */
+		if(_points_0.empty()) { if(display_mode == 1 || display_mode == 3) display(); return; }
 		_display_mode = display_mode;
-		
+
 		/* Update limits and compute extremes (to be used by sentinels) */
 		verify_limits<_Tree_P0>(_points_0, _rem_0, _p_to_ts_0, _vertices_0, 0);
 		verify_limits<_Tree_P1>(_points_1, _rem_1, _p_to_ts_1, _vertices_1, 1);
 		verify_limits<_Tree_P2>(_points_2, _rem_2, _p_to_ts_2, _vertices_2, 2);
-
-		/* In case all points have been removed - no action is needed */ /* POINTS ARE NOT FREED */
-		if(_points_0.empty()) { if(display_mode == 1 || display_mode == 3) display(); return; }
 
 		/* Call each coordinate sweep */
 		_po[0] = 1; _po[1] = 2; _po[2] = 0; sweep<_Tree_P0>(_points_0, _add_0, _rem_0, _p_to_ts_0);
@@ -272,42 +303,43 @@ struct pfv3d
 		else             sentinel_coord[0][_po[1]] = sentinel_coord[1][_po[0]] = DMAX;
 		_projection.insert(sentinels[0] = new Point(&sentinel_coord[0][0], 1));
 		_projection.insert(sentinels[1] = new Point(&sentinel_coord[1][0], 1));
-		sentinels[0]->_state = sentinels[1]->_state = 0; // TALVEZ NAO SEJA PRECISO
+		// sentinels[0]->_state = sentinels[1]->_state = 0; // TALVEZ NAO SEJA PRECISO
 
 		/* Perform the sweep */
-		bool redo, special = 0, result;
+		bool redo, save_break = 0, optimal;
 		int to_add = add.size(), to_rem = rem.size(), add_in = 0, rem_in = 0;
 		Point *saved = nullptr;
 		typename T::iterator it_add = add.begin(), it_rem = rem.begin();
 
 		for(typename T::iterator it = points.begin(); !it.is_sentinel() &&
-		   (to_add > 0 || to_rem > 0 || add_in > 0 || rem_in > 0 || saved != nullptr || special == 1); ++it) {
+		   (to_add > 0 || to_rem > 0 || add_in > 0 || rem_in > 0 || saved != nullptr || save_break == 1); ++it) {
 
 			// Se for ponto para remover - apenas por na arvore
 			// Se for ponto para adicionar - refazer
 			// Se ainda houver pontos adicionados ou removidos na arvore - refazer
-			// Se saved nao estiver a null - refazer
 			// Se tiver a mesma coordenada de ponto para adicionar - refazer
-			// Se tiver mesma coordenada de ponto para remover - refazer
-			// Se for o caso especial onde um ponto novo corta o caso de coordenadas repetidas (saved) - refazer
+			// Se tiver a mesma coordenada de ponto para remover - refazer
+			// Se for o caso de coordenadas repetidas (saved) - refazer
+			// Se for o caso onde um ponto novo corta o caso de coordenadas repetidas (saved) - refazer
 			// Nenhum dos anteriores - apenas por na arvore
 
 			if((*it)->_state == -1) redo = 0;
 			else if((*it)->_state == 1) redo = 1;
-			else if(add_in > 0 || rem_in > 0 || saved != nullptr) redo = 1;
+			else if(add_in > 0 || rem_in > 0) redo = 1;
 			else if(to_add > 0 && (*it)->_x[_po[2]] == (*it_add)->_x[_po[2]]) redo = 1;
 			else if(to_rem > 0 && (*it)->_x[_po[2]] == (*it_rem)->_x[_po[2]]) redo = 1;
-			else if(special == 1) { special = 0; redo = 1; }
+			else if(saved != nullptr) redo = 1;
+			else if(save_break == 1) { save_break = 0; redo = 1; }
 			else redo = 0;
 
 			if(redo == 0) {
 				if(_minmax == 0) insert_only_min(*it, p_to_ts, rem_in);
 				else             insert_only_max(*it, p_to_ts, rem_in);
 			} else {
-				if(_minmax == 0) result = facet_min<T>(it, p_to_ts, saved, add_in, rem_in, special);
-				else	         result = facet_max<T>(it, p_to_ts, saved, add_in, rem_in, special);
+				if(_minmax == 0) optimal = facet_min<T>(it, p_to_ts, saved, add_in, rem_in, save_break);
+				else	         optimal = facet_max<T>(it, p_to_ts, saved, add_in, rem_in, save_break);
 			   	/* Save the point for elimination if it is non optimal */
-				if(result == 0) _non_optimal.insert(_non_optimal.end(), *it);
+				if(optimal == 0) _non_optimal.insert(_non_optimal.end(), *it);
 				if(_display_mode == 2 || _display_mode == 3) display_i();
 			}
 
@@ -351,7 +383,7 @@ struct pfv3d
 	}
 
 	private: template<typename T>
-	bool facet_min (typename T::iterator &p, _Map_PTs &p_to_ts, Point *&saved, int &add_in, int &rem_in, bool &special)
+	bool facet_min (typename T::iterator &p, _Map_PTs &p_to_ts, Point *&saved, int &add_in, int &rem_in, bool &save_break)
 	{
 		Point *point = *p;
 
@@ -412,8 +444,8 @@ struct pfv3d
 			vertices[2] = add_vertex((*current)->_x[_po[0]], (*current)->_x[_po[1]], point->_x[_po[2]]);
 
 			/* Add triangles 103 and 123 (being 0 the point called into this function) */
-			add_triangle(*p_it, vertices[0], vertices[1], vertices[2], p_to_ts);
 			add_triangle(*p_it, vertices[0], *p_it, vertices[2], p_to_ts);
+			add_triangle(*p_it, vertices[0], vertices[1], vertices[2], p_to_ts);
 
 			/* There is no case of same coordinate, analysed only after cycle, when ending this function */
 			saved = nullptr;
@@ -449,7 +481,7 @@ struct pfv3d
 			if((*current)->_x[_po[1]] == point->_x[_po[1]]) {
 				/* If intersected point was marked for addition and breaks case of same coord */
 				if((*current)->_state == 1 && !tmp2_it.is_sentinel() && point->_x[_po[2]] == (*tmp2_it)->_x[_po[2]]
-				   && (*tmp2_it)->_x[_po[1]] < point->_x[_po[1]]) special = 1;
+				   && (*tmp2_it)->_x[_po[1]] < point->_x[_po[1]] && (*tmp2_it)->_state == 0) save_break = 1;
 
 				/* If it was a point marked for addition - update their number i\n the projection tree */
 				if((*current)->_state == 1) --add_in;
@@ -471,7 +503,7 @@ struct pfv3d
 	}
 
 	private: template<typename T>
-	bool facet_max (typename T::iterator &p, _Map_PTs &p_to_ts, Point *&saved, int &add_in, int &rem_in, bool &special)
+	bool facet_max (typename T::iterator &p, _Map_PTs &p_to_ts, Point *&saved, int &add_in, int &rem_in, bool &save_break)
 	{
 		return 1;
 	}

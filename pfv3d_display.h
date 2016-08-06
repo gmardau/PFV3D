@@ -35,9 +35,9 @@ class pfv3d_display
 
 	/* Display */
 	int _program;
-	glm::vec3 _camera_view = glm::vec3(2, 0, 0), _camera_look = glm::vec3(0, 0, 0), _camera_up = glm::vec3(0, 0, 1);
-	float _radius = 2, _zoom_factor = 1.05;
-	float _r_x = 0, _r_y = 0, _r_z = 0, _r_xy = 0;
+	glm::vec3 _camera_view = glm::vec3(15, 15, 17), _camera_look = glm::vec3(0, 0, 0), _camera_up = glm::vec3(0, 0, 1);
+	float _radius = 30, _zoom_factor = 1.05;
+	float _r_x = 0, _r_y = 0, _r_z = M_PI/4, _r_xy = M_PI/4;
 
 	bool _lb_state = 0, _rb_state = 0;
 	float _pm_x, _pm_y;
@@ -54,9 +54,11 @@ class pfv3d_display
 	public:
 	pfv3d_display () : _running(1), _mode(0), _data{0, 0, 0, 0, 0}
 	{
-		Screen *screen = DefaultScreenOfDisplay(XOpenDisplay(NULL));
+		Display *display = XOpenDisplay(NULL);
+		Screen *screen = DefaultScreenOfDisplay(display);
 		_window_w = screen->width;
 		_window_h = screen->height;
+		XCloseDisplay(display);
 
 		/* SDL */
 		SDL_Init(SDL_INIT_EVERYTHING);
@@ -87,8 +89,10 @@ class pfv3d_display
 			uniform mat4 view;\
 			uniform mat4 projection;\
 			out vec3 f_normal;\
+			out vec3 f_position;\
 			void main() {\
 				f_normal = v_normal;\
+				f_position = vec3(model * vec4(position, 1.0f));\
 				gl_Position = projection * view * model * vec4(position, 1.0);\
 			}";
 		int vertex_shader = glCreateShader(GL_VERTEX_SHADER);
@@ -99,14 +103,23 @@ class pfv3d_display
 		const char *fragment_src = "\
 			#version 330\n\
 			in vec3 f_normal;\
+			in vec3 f_position;\
 			uniform vec4 light_colour;\
 			uniform vec4 object_colour;\
+			uniform vec3 view_position;\
 			out vec4 colour;\
 			void main(){\
-				vec4 ambient = 0.1f * light_colour;\
 				vec3 direction = normalize(vec3(1, 2, 3));\
-				float diff = max(dot(normalize(f_normal), direction), 0.0);\
-				vec4 diffuse = diff * light_colour;\
+				vec3 light_position = vec3(8.5, 8, 9);\
+				vec3 light_direction = normalize(light_position-f_position);\
+				vec3 view_direction = normalize(view_position - f_position);\
+				vec3 reflect_direction = reflect(-light_direction, f_normal);\
+				float spec = pow(max(dot(view_direction, reflect_direction), 0.0), 32);\
+				\
+				vec4 ambient = 0.1f * light_colour;\
+				vec4 diffuse = max(dot(normalize(f_normal), direction), 0.0) * light_colour;\
+				vec4 specular = 0.5f * spec * light_colour;\
+				\
 				colour = (ambient + diffuse) * object_colour;\
 			}";
 		int fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -142,6 +155,8 @@ class pfv3d_display
 		_mutex_cond.unlock();
 		_renderer.join();
 		display_clear();
+		glDeleteProgram(_program);
+		SDL_GL_DeleteContext(_context);
 		SDL_DestroyWindow(_window);
 		SDL_Quit();
 	}
@@ -151,10 +166,11 @@ class pfv3d_display
 	private:
 	void display_clear ()
 	{
+		if(_data[0] == 1) {
+			glDeleteVertexArrays(1, &_data[2]);
+			glDeleteBuffers(1, &_data[3]);
+			glDeleteBuffers(1, &_data[4]); }
 		_data[0] = _data[1] = 0;
-		glDeleteVertexArrays(1, &_data[2]);
-		glDeleteBuffers(1, &_data[3]);
-		glDeleteBuffers(1, &_data[4]);
 	}
 	/* === Clear display variables and objects data === */
 
@@ -163,9 +179,10 @@ class pfv3d_display
 	void display_frontier (bool mode, int np, _List_T &triangles)
 	{
 		if(triangles.empty()) {
-			glDeleteVertexArrays(1, &_data[2]);
-			glDeleteBuffers(1, &_data[3]);
-			glDeleteBuffers(1, &_data[4]);
+			if(_data[0] == 1) {
+				glDeleteVertexArrays(1, &_data[2]);
+				glDeleteBuffers(1, &_data[3]);
+				glDeleteBuffers(1, &_data[4]); }
 			_np = _nt = 0;
 			_mode = mode;
 			_mutex_cond.lock();
@@ -305,9 +322,16 @@ class pfv3d_display
 		glUniformMatrix4fv(      view_location, 1, GL_FALSE, &view[0][0]);
 		glUniformMatrix4fv(projection_location, 1, GL_FALSE, &projection[0][0]);
 
+		/* Camera Position */
+		int view_position_location = glGetUniformLocation(_program, "view_position");
+		glUniform3f(view_position_location, _camera_view[0], _camera_view[1], _camera_view[2]);
 		/* Object Colour */
 		int object_colour_location = glGetUniformLocation(_program, "object_colour");
-		glUniform4f(object_colour_location, 0.1, 1, 0.2, 1);
+		// glUniform4f(object_colour_location, 1, 0.3, 0.1, 1);
+		// glUniform4f(object_colour_location, 0.1, 1, 0.2, 1);
+		glUniform4f(object_colour_location, 0.2, 0.5, 1, 1);
+		// glUniform4f(object_colour_location, 0.75, 0.75, 0.75, 1);
+		// glUniform4f(object_colour_location, 1, 0.85, 0, 1);
 		/* Light Colour */
 		int light_colour_location = glGetUniformLocation(_program, "light_colour");
 		glUniform4f(light_colour_location, 1, 1, 1, 1);
