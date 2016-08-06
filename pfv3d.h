@@ -194,6 +194,7 @@ struct pfv3d
 	void verify_limits (T &points, T &rem, _Map_PTs &p_to_ts, T &vertices, int index)
 	{
 		double limits[2] = {DMIN, DMAX}, extreme;
+		Point *p;
 
 		/* Get new limits */
 		for(typename T::iterator it = points.begin(); !it.is_sentinel(); ++it)
@@ -210,10 +211,11 @@ struct pfv3d
 		if(_limits[index][0] == limits[0] && _limits[index][1] == limits[1]) return;
 		/* If they did - update surface extremes */
 		if(_minmax == 0) {
-			Point *p;
-			typename T::reverse_iterator it;
+			typename T::reverse_iterator it, tmp_it;
+
 			/* Remove points marked for removal that are beyond the new limits */
-			for(it = points.rbegin(); !it.is_sentinel() && (*it)->_state != 0; ) {
+			for(it = points.rbegin(); !it.is_sentinel() && (*it)->_state != 0; it = tmp_it) {
+				tmp_it = it.next();
 				if((*it)->_state == -1) { p = *it;
 					/* If next point has same coordinate - maintain removing point to force facet recomputation */
 					if(it.has_next() && p->_x[index] == (*it.next())->_x[index] && (*it.next())->_state == 0) break;
@@ -223,8 +225,9 @@ struct pfv3d
 					rem.erase(*it); points.erase(*it);
 					/* If point would be beyond the new extreme - pull it back inside between the extreme and the limit */
 					if(p->_x[index] >= extreme) p->_x[index] = (extreme + limits[index]) / 2;
-					it = points.rbegin();
-				} else ++it; }
+				}
+			}
+
 			/* Translate vertices to the new extremes */
 			it = vertices.rbegin();
 			/* If extremes have extended - just update coordinates */
@@ -242,7 +245,7 @@ struct pfv3d
 
 		}
 
-		/* Update limits and extreme*/
+		/* Update limits and extreme */
 		_limits[index][0] = limits[0]; _limits[index][1] = limits[1]; _extremes[index] = extreme;
 	}
 
