@@ -5,10 +5,10 @@
 
 int main(int argc, char const *argv[])
 {
-	int n_points, i;
+	int n_points, i, j;
 	double **points;
 	pfv3d visualiser;
-	FILE *f = fopen("Input/surf05.dat", "r");
+	FILE *f = fopen("Input/surf06.dat", "r");
 
 	fscanf(f, "%d", &n_points);
 	points = (double **) malloc(n_points * sizeof(double *));
@@ -20,9 +20,17 @@ int main(int argc, char const *argv[])
 
 	std::random_shuffle(&points[0], &points[n_points]);
 
-	for(i = 0; i < n_points; ++i)
-		visualiser.add_point(points[i]);
-	visualiser.compute(2);
+	for(i = 0; i < 10000; ++i) {
+		for(j = 0; j < rand()%10; ++j)
+			visualiser.add_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j)
+			visualiser.rem_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j)
+			visualiser.add_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j)
+			visualiser.rem_point(points[rand()%n_points]);
+		visualiser.compute(1);
+	}
 	visualiser.display();
 
 	for(i = 0; i < n_points; ++i)
