@@ -7,7 +7,7 @@ int main(int argc, char const *argv[])
 {
 	int i; 
 	pfv3d a(0);
-	FILE *f = fopen("Input/surf06.dat", "r");
+	FILE *f = fopen("Input/surf06-500.dat", "r");
 	fscanf(f, "%d", &i);
 	double c[i][3];
 	int d[i];
@@ -18,20 +18,20 @@ int main(int argc, char const *argv[])
 	fclose(f);
 
 	std::random_shuffle(&d[0], &d[i]);
-	for(int j = 0; j < i; j+=154){
-		for(int k = 0; k < 154; k++)
+	for(int j = 0; j < i; j+=1){
+		for(int k = 0; k < 1; k++)
 			a.add_point(c[d[j+k]]);
-		a.compute(2);
+		a.compute(0);
 	}
-	a.display();
+	// a.display();
 
 	std::random_shuffle(&d[0], &d[i]);
-	for(int j = 0; j < i; j+=154) {
-		for(int k = 0; k < 154; k++)
+	for(int j = 0; j < i; j+=1) {
+		for(int k = 0; k < 1; k++)
 			a.rem_point(c[d[j+k]]);
-		a.compute(2);
+		a.compute(0);
 	}
-	a.display();
+	// a.display();
 
 	// std::random_shuffle(&d[0], &d[i]);
 	// for(int j = 0; j < 1000; j++) {
@@ -43,7 +43,7 @@ int main(int argc, char const *argv[])
 	// 		a.add_point(c[d[rand()%i]]);
 	// 	for(int k = 0; k < rand()%10; ++k)
 	// 		a.rem_point(c[d[rand()%i]]);
-	// 	a.compute(0);
+	// 	a.compute(2);
 	// }
 	// a.display();
 	

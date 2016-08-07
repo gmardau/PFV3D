@@ -86,7 +86,7 @@ struct pfv3d
 	void minimise ()
 	{
 		if(_minmax == 0) return;
-		_minmax = 1;
+		_minmax = 0;
 		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
 		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
 		_extremes[0] = _extremes[1] = _extremes[2] = DMAX;
@@ -95,7 +95,7 @@ struct pfv3d
 	void maximise ()
 	{
 		if(_minmax == 1) return;
-		_minmax = 0;
+		_minmax = 1;
 		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
 		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
 		_extremes[0] = _extremes[1] = _extremes[2] = DMIN;
@@ -291,12 +291,12 @@ struct pfv3d
 	void compute (int display_mode = 0)
 	{
 		/* If no action is needed */
-		if(_add_0.empty() && _rem_0.empty()) { if(display_mode == 1 || display_mode == 3) display(); return; }
+		if(_add_0.empty() && _rem_0.empty()) { if(display_mode != 0) display_i(); return; }
 
 		/* If all points from the previous computation are to be removed - clear frontier */
 		if(_points_0.size() == _add_0.size() + _rem_0.size() && _rem_0.size() > 0) clear_frontier();
 		/* In case all points have been removed - no action is needed */
-		if(_points_0.empty()) { if(display_mode == 1 || display_mode == 3) display(); return; }
+		if(_points_0.empty()) { if(display_mode != 0) display_i(); return; }
 		_display_mode = display_mode;
 
 		/* Update limits and compute extremes (to be used by sentinels) */
@@ -330,7 +330,7 @@ struct pfv3d
 			(*it)->_state = 0; _add_0.erase(it); }
 		_add_1.clear(); _add_2.clear();
 
-		if(display_mode == 1 || display_mode == 3) display();
+		if(display_mode != 0) display_i();
 	}
 
 	private: template<typename T>
@@ -385,7 +385,7 @@ struct pfv3d
 				else	         optimal = facet_max<T>(it, p_to_ts, saved, add_in, rem_in, save_break);
 			   	/* Save the point for elimination if it is non optimal */
 				if(optimal == 0) _non_optimal.insert(_non_optimal.end(), *it);
-				if(_display_mode == 2 || _display_mode == 3) display_i();
+				if(_display_mode == 2) display_i();
 			}
 
 			/* Update iterators and number of points to be added or to be removed */

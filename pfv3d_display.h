@@ -46,13 +46,13 @@ class pfv3d_display
 	/* Flags and objects data */
 	bool _mode;
 	float *_colours[4];
-	uint _data[5];
+	uint _data[4];
 	int _np, _nt;
 	/* === Variables === */
 
 	/* === Constructor/Destructor === */
 	public:
-	pfv3d_display () : _running(1), _mode(0), _data{0, 0, 0, 0, 0}
+	pfv3d_display () : _running(1), _mode(0), _data{0, 0, 0, 0}
 	{
 		Display *display = XOpenDisplay(NULL);
 		Screen *screen = DefaultScreenOfDisplay(display);
@@ -61,7 +61,7 @@ class pfv3d_display
 		XCloseDisplay(display);
 
 		/* SDL */
-		SDL_Init(SDL_INIT_EVERYTHING);
+		SDL_Init(SDL_INIT_VIDEO);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -110,7 +110,7 @@ class pfv3d_display
 			out vec4 colour;\
 			void main(){\
 				vec3 direction = normalize(vec3(1, 2, 3));\
-				vec3 light_position = vec3(8.5, 8, 9);\
+				vec3 light_position = vec3(7.5, 7, 8);\
 				vec3 light_direction = normalize(light_position-f_position);\
 				vec3 view_direction = normalize(view_position - f_position);\
 				vec3 reflect_direction = reflect(-light_direction, f_normal);\
@@ -136,6 +136,12 @@ class pfv3d_display
 		glDeleteShader(vertex_shader);
 		glDeleteShader(fragment_shader);
 
+		/* Generate Buffers */
+		glGenVertexArrays(1, &_data[1]);
+		glBindVertexArray(_data[1]);
+		glGenBuffers(1, &_data[2]);
+		glGenBuffers(1, &_data[3]);
+
 		/* Variables */
 		display_clear();
 
@@ -155,6 +161,9 @@ class pfv3d_display
 		_mutex_cond.unlock();
 		_renderer.join();
 		display_clear();
+		glDeleteVertexArrays(1, &_data[1]);
+		glDeleteBuffers(1, &_data[2]);
+		glDeleteBuffers(1, &_data[3]);
 		glDeleteProgram(_program);
 		SDL_GL_DeleteContext(_context);
 		SDL_DestroyWindow(_window);
@@ -166,11 +175,7 @@ class pfv3d_display
 	private:
 	void display_clear ()
 	{
-		if(_data[0] == 1) {
-			glDeleteVertexArrays(1, &_data[2]);
-			glDeleteBuffers(1, &_data[3]);
-			glDeleteBuffers(1, &_data[4]); }
-		_data[0] = _data[1] = 0;
+
 	}
 	/* === Clear display variables and objects data === */
 
@@ -179,10 +184,7 @@ class pfv3d_display
 	void display_frontier (bool mode, int np, _List_T &triangles)
 	{
 		if(triangles.empty()) {
-			if(_data[0] == 1) {
-				glDeleteVertexArrays(1, &_data[2]);
-				glDeleteBuffers(1, &_data[3]);
-				glDeleteBuffers(1, &_data[4]); }
+			_data[0] = 0;
 			_np = _nt = 0;
 			_mode = mode;
 			_mutex_cond.lock();
@@ -216,32 +218,21 @@ class pfv3d_display
 
 		_mutex_data.lock();
 
-		/* Free previously bound data */
-		if(_data[0] == 1) {
-			glDeleteVertexArrays(1, &_data[2]);
-			glDeleteBuffers(1, &_data[3]);
-			glDeleteBuffers(1, &_data[4]);
-		}
-
-		/* Bind new data */
-		glGenVertexArrays(1, &_data[2]);
-		glGenBuffers(1, &_data[3]);
-		glGenBuffers(1, &_data[4]);
-		glBindVertexArray(_data[2]);
-		glBindBuffer(GL_ARRAY_BUFFER, _data[3]);
+		/* Bind data */
+		glBindBuffer(GL_ARRAY_BUFFER, _data[2]);
 		glBufferData(GL_ARRAY_BUFFER, size_vertices, vertices, GL_STATIC_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[4]);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[3]);
 	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_indices, indices, GL_STATIC_DRAW);
 		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)0);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(1, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)(3*sizeof(double)));
 		glEnableVertexAttribArray(1);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
+		// glBindBuffer(GL_ARRAY_BUFFER, 0);
+		// glBindVertexArray(0);
 
 		_mutex_data.unlock();
 
-		_data[0] = 1; _data[1] = triangles.size()*3;
+		_data[0] = triangles.size()*3;
 		_np = np; _nt = triangles.size();
 		_mode = mode;
 		// colours[o] = colour;
@@ -338,9 +329,9 @@ class pfv3d_display
 
 		/* Draw Triangles */
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		glBindVertexArray(_data[2]);
-		glDrawElements(GL_TRIANGLES, _data[1], GL_UNSIGNED_INT, 0);
-		glBindVertexArray(0);
+		// glBindVertexArray(_data[1]);
+		glDrawElements(GL_TRIANGLES, _data[0], GL_UNSIGNED_INT, 0);
+		// glBindVertexArray(0);
 
 		// object_colour_location = glGetUniformLocation(_program, "object_colour");
 		// glUniform4f(object_colour_location, 1, 1, 1, 1);
