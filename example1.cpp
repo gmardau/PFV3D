@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "pfv3d.h"
 #include <algorithm>
+#include "pfv3d"
 
 int main(int argc, char const *argv[])
 {
@@ -21,7 +21,7 @@ int main(int argc, char const *argv[])
 	for(int j = 0; j < i; j+=1){
 		for(int k = 0; k < 1; k++)
 			a.add_point(c[d[j+k]]);
-		a.compute(0);
+		a.compute(1);
 	}
 	// a.display();
 

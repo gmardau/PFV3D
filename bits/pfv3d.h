@@ -4,7 +4,6 @@
 #include <limits>
 #include <list>
 #include <unordered_map>
-#include "../../Libraries/CppTreeLib/tree.h"
 
 struct Point
 {
@@ -735,17 +734,6 @@ struct pfv3d
 		p_to_ts.erase(point);
 	}
 	/* === Delete triangles */
-
-
-	template <typename T>
-	void print_tree(int spaces, typename T::traversor tr)
-	{
-		if(!tr.has_node()) return;
-		if(tr.has_right()) print_tree<T>(spaces+4, tr.right());
-		printf("%*s", spaces, "");
-		printf("%lf %lf %lf\t\t\t\t%d\n", (*tr)->_x[0], (*tr)->_x[1], (*tr)->_x[2], tr._node->_balance);
-		if(tr.has_left()) print_tree<T>(spaces+4, tr.left());
-	}
 };
 
 #endif

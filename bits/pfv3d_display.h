@@ -91,7 +91,7 @@ class pfv3d_display
 			out vec3 f_normal;\
 			out vec3 f_position;\
 			void main() {\
-				f_normal = v_normal;\
+				f_normal = mat3(transpose(inverse(model))) * v_normal;\
 				f_position = vec3(model * vec4(position, 1.0f));\
 				gl_Position = projection * view * model * vec4(position, 1.0);\
 			}";
@@ -280,7 +280,7 @@ class pfv3d_display
 			}
 			_mutex_cond.lock();
 			if(_mode == 0) _cond_main.notify_one();
-			// if(!_running) _mutex_cond.unlock();
+			if(!_running) _mutex_cond.unlock();
 		}
 		pthread_exit(NULL);
 	}
@@ -300,7 +300,7 @@ class pfv3d_display
 		glUseProgram(_program);
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glViewport (0, 0, _window_w, _window_h);
+		glViewport(0, 0, _window_w, _window_h);
 
 		/* Matrix transformations - Model, View, Projection */
 		glm::mat4 model = glm::mat4(1.0);
@@ -331,14 +331,6 @@ class pfv3d_display
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		// glBindVertexArray(_data[1]);
 		glDrawElements(GL_TRIANGLES, _data[0], GL_UNSIGNED_INT, 0);
-		// glBindVertexArray(0);
-
-		// object_colour_location = glGetUniformLocation(_program, "object_colour");
-		// glUniform4f(object_colour_location, 1, 1, 1, 1);
-		// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		// glLineWidth(3);
-		// glBindVertexArray(_data[2]);
-		// glDrawElements(GL_TRIANGLES, _data[1], GL_UNSIGNED_INT, 0);
 		// glBindVertexArray(0);
 
 		glUseProgram(0);

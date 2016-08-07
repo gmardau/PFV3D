@@ -2,13 +2,14 @@ CC = g++
 -CC = -Wall -ansi -pedantic -lm -g -lpthread -std=c++11
 -GL = -lGLEW -lGLU -lGL -lSDL2 -lX11
 
-DEP = main.cpp pfv3d.h pfv3d_display.h ../../Libraries/CppTreeLib/*
-MAIN = main.cpp
+example1: example1.cpp
+	$(CC) $(-CC) $(-GL) example1.cpp -o example1
 
-main: $(DEP)
-	$(CC) $(-CC) $(-GL) $(MAIN) -o main
+main: example1
 
-all: main
+all: example1
 
 clean:
-	rm -f main
+	rm -f example1
+
+.PHONY: example1
