@@ -15,10 +15,10 @@
 #include <SDL2/SDL_opengl.h>
 #include <X11/Xlib.h>
 
+#define custom_fmod(x,y) (x)>=0 ? fmod(x,y) : fmod(-x,y)
+
 class pfv3d_display
 {
-	#define DMAX std::numeric_limits<double>::max()
-	#define DMIN std::numeric_limits<double>::lowest()
 	typedef std::list<Triangle> _List_T;
 
 	/* === Variables === */
@@ -26,42 +26,38 @@ class pfv3d_display
 	SDL_Window *_window;
 	SDL_GLContext _context;
 	int _window_w, _window_h;
-	int _screen_w, _screen_h;
 
 	/* Thread */
-	bool _running = 1;
+	bool _running;
 	std::thread _renderer;
 	std::mutex _mutex_cond, _mutex_data;
 	std::condition_variable_any _cond_main, _cond_renderer;
 
 	/* Display */
 	int _program;
-	double _cam_fov, _cam_radius, _cam_zoom = 1.1;
-	glm::dvec3 _cam_view, _cam_look, _cam_up, _obj_look;
-	glm::dquat _cam_quat, _obj_quat;
+	glm::vec3 _camera_view = glm::vec3(15, 15, 17), _camera_look = glm::vec3(0, 0, 0), _camera_up = glm::vec3(0, 0, 1);
+	float _radius = 30, _zoom_factor = 1.05;
+	float _r_x = 0, _r_y = 0, _r_z = M_PI/4, _r_xy = M_PI/4;
 
-	/* Mouse */
-	bool _left_button = 0, _right_button = 0;
-	float _mouse_x, _mouse_y;
-	float _mouse_sens = 0.66;
-
-	/* Keyboard */
-	bool _key_ctrl = 0, _key_alt = 0, _key_shift = 0;
+	bool _lb_state = 0, _rb_state = 0;
+	float _pm_x, _pm_y;
+	float _sensitivity = 0.66;
 
 	/* Flags and objects data */
-	bool _mode = 0;
-	uint _data[4] = {0, 0, 0, 0};
+	bool _mode;
+	float *_colours[4];
+	uint _data[4];
 	int _np, _nt;
 	/* === Variables === */
 
 	/* === Constructor/Destructor === */
 	public:
-	pfv3d_display ()
+	pfv3d_display () : _running(1), _mode(0), _data{0, 0, 0, 0}
 	{
 		Display *display = XOpenDisplay(NULL);
 		Screen *screen = DefaultScreenOfDisplay(display);
-		_window_w = _screen_w = screen->width;
-		_window_h = _screen_h = screen->height;
+		_window_w = screen->width;
+		_window_h = screen->height;
 		XCloseDisplay(display);
 
 		/* SDL */
@@ -73,14 +69,16 @@ class pfv3d_display
 			    SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED);
 		_context = SDL_GL_CreateContext(_window);
 
-		SDL_SetWindowTitle(_window, "Pareto Frontier Visualiser for 3 Dimensions");
-
 		/* GLEW */
 		glewExperimental = GL_TRUE;
 		glewInit();
 
 		/* Open GL */
+		// glShadeModel(GL_SMOOTH);
+		// glEnable(GL_BLEND | GL_ALPHA_TEST | GL_DEPTH_TEST | GL_LINE_SMOOTH | GL_POLYGON_SMOOTH | GL_NORMALIZE);
+		// glEnable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		/* Vertex Shader */
 		const char *vertex_src = "\
@@ -144,6 +142,9 @@ class pfv3d_display
 		glGenBuffers(1, &_data[2]);
 		glGenBuffers(1, &_data[3]);
 
+		/* Variables */
+		display_clear();
+
 		/* Create display thread */
 		signal(SIGINT, exit);
 		_mutex_cond.lock();
@@ -159,6 +160,7 @@ class pfv3d_display
 		_cond_renderer.notify_one();
 		_mutex_cond.unlock();
 		_renderer.join();
+		display_clear();
 		glDeleteVertexArrays(1, &_data[1]);
 		glDeleteBuffers(1, &_data[2]);
 		glDeleteBuffers(1, &_data[3]);
@@ -169,12 +171,21 @@ class pfv3d_display
 	}
 	/* === Constructor/Destructor === */
 
+	/* === Clear display variables and objects data === */
+	private:
+	void display_clear ()
+	{
+
+	}
+	/* === Clear display variables and objects data === */
+
 	/* === Activate frontier display === */
 	public:
-	void display_frontier (bool mode, int minmax, _List_T &triangles)
+	void display_frontier (bool mode, int np, _List_T &triangles)
 	{
 		if(triangles.empty()) {
 			_data[0] = 0;
+			_np = _nt = 0;
 			_mode = mode;
 			_mutex_cond.lock();
 			_cond_renderer.notify_one();
@@ -183,23 +194,27 @@ class pfv3d_display
 			return;
 		}
 		
-		/* Get data */
 		size_t size_indices = triangles.size()*3*sizeof(int);
 		size_t size_vertices = triangles.size()*3*3*2*sizeof(double);
-		int i, j, v = 0, t = 0, *indices = (int*) malloc(size_indices);
-		double limits[3][2] = {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}},
-		       normal[3], *vertices = (double*) malloc(size_vertices);
+		int v = 0, t = 0, *indices = (int*) malloc(size_indices);
+		double *vertices = (double*) malloc(size_vertices);
+		double normal[3];
+
+		/* Get data */
 		for(_List_T::iterator it = triangles.begin(); it != triangles.end(); ++it) {
-			normal[0] = normal[1] = normal[2] = 0; normal[it->_normal] = 1;
-			for(i = 0; i < 3; ++i, ++t) {
-				for(j = 0; j < 3; ++j, ++v) {
-					vertices[v] = it->_v[i]->_x[j];
-					if(vertices[v] < limits[i][0]) limits[i][0] = vertices[v];
-					if(vertices[v] > limits[i][1]) limits[i][1] = vertices[v]; }
-				for(j = 0; j < 3; ++j, ++v) vertices[v] = normal[j];
-				indices[t] = t;
+			normal[0] = normal[1] = normal[2] = 0;
+			     if(it->_v[0]->_x[0] == it->_v[1]->_x[0] && it->_v[0]->_x[0] == it->_v[2]->_x[0]) normal[0] = 1;
+			else if(it->_v[0]->_x[1] == it->_v[1]->_x[1] && it->_v[0]->_x[1] == it->_v[2]->_x[1]) normal[1] = 1;
+			else                                                                                  normal[2] = 1;
+			for(int i = 0; i < 3; ++i) {
+				vertices[v++] = it->_v[i]->_x[0]; vertices[v++] = it->_v[i]->_x[1]; vertices[v++] = it->_v[i]->_x[2];
+				vertices[v++] = normal[0]; vertices[v++] = normal[1]; vertices[v++] = normal[2];
 			}
+			indices[t] = t; ++t; indices[t] = t; ++t; indices[t] = t; ++t;
 		}
+
+		// int indices[6] = {0, 1, 2, 2, 3, 4};
+		// double vertices[15] = {0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1};
 
 		_mutex_data.lock();
 
@@ -212,42 +227,22 @@ class pfv3d_display
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(1, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)(3*sizeof(double)));
 		glEnableVertexAttribArray(1);
-
-		/* Reposition the camera */
-		if(_mode == 0) {
-			for(i = 0; i < 3; ++i) _cam_look[i] = _obj_look[i] = (limits[i][0]+limits[i][1])/2.0;
-			if(minmax == 0) {
-				double angle = M_PI/4.0, angle_cos = cos(angle/2.0), angle_sin = sin(angle/2.0);
-				glm::dvec3 axis = glm::normalize(glm::vec3(0, 0, 1));
-				_cam_quat = glm::dquat(angle_cos, axis[0]*angle_sin, axis[1]*angle_sin, axis[2]*angle_sin);
-				axis = glm::normalize(glm::vec3(1, -1, 0));
-				_cam_quat = glm::dquat(angle_cos, axis[0]*angle_sin, axis[1]*angle_sin, axis[2]*angle_sin) * _cam_quat;
-			} else {
-				double angle = -3*M_PI/4.0, angle_cos = cos(angle/2.0), angle_sin = sin(angle/2.0);
-				glm::dvec3 axis = glm::normalize(glm::vec3(0, 0, 1));
-				_cam_quat = glm::dquat(angle_cos, axis[0]*angle_sin, axis[1]*angle_sin, axis[2]*angle_sin);
-				angle = -M_PI/4.0, angle_cos = cos(angle/2.0), angle_sin = sin(angle/2.0);
-				axis = glm::normalize(glm::vec3(-1, 1, 0));
-				_cam_quat = glm::dquat(angle_cos, axis[0]*angle_sin, axis[1]*angle_sin, axis[2]*angle_sin) * _cam_quat;
-			}
-			_obj_quat = glm::quat(1, 0, 0, 0);
-			_cam_fov = M_PI/4.0;
-			double span = glm::distance(glm::dvec2(limits[0][1], limits[1][0]), glm::dvec2(limits[0][0], limits[1][1]));
-			span = fmax(glm::distance(glm::dvec3(limits[0][0], limits[1][0], limits[2][1]),
-			                              glm::dvec3(limits[0][1], limits[1][1], limits[2][0])), span);
-			_cam_radius = span/2.0 / sin(_cam_fov/2.0) * 1.1;
-		}
+		// glBindBuffer(GL_ARRAY_BUFFER, 0);
+		// glBindVertexArray(0);
 
 		_mutex_data.unlock();
 
-		free(indices); free(vertices);
-
 		_data[0] = triangles.size()*3;
+		_np = np; _nt = triangles.size();
 		_mode = mode;
+		// colours[o] = colour;
+
 		_mutex_cond.lock();
 		_cond_renderer.notify_one();
 		if(_mode == 0) _cond_main.wait(_mutex_cond);
 		_mutex_cond.unlock();
+
+		free(indices); free(vertices);
 	}
 	/* === Activate frontier display === */
 
@@ -273,16 +268,13 @@ class pfv3d_display
 					switch(event.type) {
 						case SDL_MOUSEMOTION: case SDL_MOUSEBUTTONUP: case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEWHEEL:
 							mouse(event); break;
-						case SDL_KEYUP: case SDL_KEYDOWN:
-							keyboard(event); break;
 						case SDL_WINDOWEVENT:
 							if(event.window.event == SDL_WINDOWEVENT_RESIZED) {
 								_window_w = event.window.data1;
 								_window_h = event.window.data2;
-								// if(event.window.data1 < event.window.data2) _cam_radius *= 1+ 
 							}
 							break;
-						case SDL_QUIT: rendering = 0; SDL_HideWindow(_window); break;
+						case SDL_QUIT: rendering = 0; display_clear(); SDL_HideWindow(_window); break;
 					}
 				draw();
 			}
@@ -300,34 +292,23 @@ class pfv3d_display
 	{
 		_mutex_data.lock();
 
+		char title[30];
+		sprintf(title, "Points:%d   Triangles:%d", _np, _nt);
+		SDL_SetWindowTitle(_window, title);
+
 		/* Reset display */
 		glUseProgram(_program);
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glViewport(0, 0, _window_w, _window_h);
 
-		/* Model transformation */
-		glm::dmat4 translate_obj1 = glm::translate(glm::dmat4(1), -_obj_look);
-		glm::dmat4 translate_obj2 = glm::translate(glm::dmat4(1), _obj_look);
-		glm::dmat4 rotate_obj = glm::mat4_cast(_obj_quat);
-		glm::mat4 model = glm::dmat4(1) * translate_obj2 * rotate_obj * translate_obj1;
+		/* Matrix transformations - Model, View, Projection */
+		glm::mat4 model = glm::mat4(1.0);
 
-		/* View transformation */
-		glm::dvec4 initial_cam_view = glm::dvec4(_cam_radius, 0, 0, 1);
-		glm::vec4 initial_cam_up = glm::vec4(0, 0, 1, 1);
-		glm::dmat4 rotate_cam = glm::mat4_cast(_cam_quat);
-		glm::dmat4 translate_cam = glm::translate(glm::dmat4(1), _cam_look);
-		_cam_view = glm::dvec3(translate_cam * rotate_cam * initial_cam_view);
-		_cam_up = glm::dvec3(rotate_cam * initial_cam_up);
-		glm::mat4 view = glm::lookAt(_cam_view, _cam_look, _cam_up);
+		// model = glm::rotate(model, 3.14f, glm::vec3(0.0, 0.0, 1.0));
 
-		// printf("%lf %lf %lf\n", _cam_view[0], _cam_view[1], _cam_view[2]);
-		// printf("%lf %lf %lf\n", _cam_look[0], _cam_look[1], _cam_look[2]);
-		// printf("%lf %lf %lf\n\n", _cam_up[0], _cam_up[1], _cam_up[2]);
-
-		/* Projection transformation */
-		glm::mat4 projection = glm::perspective(_cam_fov, (double)_window_w/_window_h, (double)0.1, (double)1000);
-
+		glm::mat4 view = glm::lookAt(_camera_view, _camera_look, _camera_up);
+		glm::mat4 projection = glm::perspective(glm::radians(45.0f), (GLfloat)_window_w/(GLfloat)_window_h, 0.1f, 1000.0f);
 		int      model_location = glGetUniformLocation(_program, "model");
 		int       view_location = glGetUniformLocation(_program, "view");
 		int projection_location = glGetUniformLocation(_program, "projection");
@@ -337,7 +318,7 @@ class pfv3d_display
 
 		/* Camera Position */
 		int view_position_location = glGetUniformLocation(_program, "view_position");
-		glUniform3f(view_position_location, _cam_view[0], _cam_view[1], _cam_view[2]);
+		glUniform3f(view_position_location, _camera_view[0], _camera_view[1], _camera_view[2]);
 		/* Object Colour */
 		int object_colour_location = glGetUniformLocation(_program, "object_colour");
 		// glUniform4f(object_colour_location, 1, 0.3, 0.1, 1);
@@ -362,76 +343,46 @@ class pfv3d_display
 	}
 	/* === Drawing function === */
 
-	/* === Keyboard handling === */
-	private:
-	void keyboard (SDL_Event &event)
-	{
-		switch(event.key.keysym.sym) {
-			case SDLK_LCTRL:  case SDLK_RCTRL:  _key_ctrl  = event.type == SDL_KEYUP ? 0 : 1; break;
-			case SDLK_LALT:   case SDLK_RALT:   _key_alt   = event.type == SDL_KEYUP ? 0 : 1; break;
-			case SDLK_LSHIFT: case SDLK_RSHIFT: _key_shift = event.type == SDL_KEYUP ? 0 : 1; break;
-		}
-	}
-	/* === Keyboard handling === */
-
 	/* === Mouse handling === */
 	private:
-	void mouse (SDL_Event &event)
+	void mouse (SDL_Event event)
 	{
-		SDL_MouseMotionEvent *motion = &event.motion;
-		SDL_MouseButtonEvent *button = &event.button;
+		SDL_MouseMotionEvent *motion = (SDL_MouseMotionEvent *) &event;
+		SDL_MouseButtonEvent *button = (SDL_MouseButtonEvent *) &event;
+		int mx, my;
 
 		switch(event.type) {
-			case SDL_MOUSEMOTION:
-				if(_left_button == 1) {
-					double span = sin(_cam_fov/2.0) * _cam_radius * 2;
-					glm::dvec4 translation = glm::dvec4(0, -motion->xrel*span/_window_h, motion->yrel*span/_window_h, 1);
-					_cam_look += glm::dvec3(glm::mat4_cast(_cam_quat) * translation);
-				}
-				if(_right_button == 1) {
-					if(_key_ctrl == 1) {
-						glm::dvec3 axis = glm::normalize(glm::dvec3(glm::mat4_cast(_cam_quat)*glm::dvec4(_cam_radius,0,0,1)));
-						double angle = motion->xrel / (_screen_w * _mouse_sens) * 2*M_PI;
-						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
-						axis * 2.0;
-					} else if (_key_alt == 1) {
-						double distance = glm::length(glm::vec2(motion->xrel, -motion->yrel));
-						glm::dvec3 axis = glm::normalize(glm::dvec3(0, motion->yrel, motion->xrel));
-						axis = glm::normalize(glm::dvec3(glm::mat4_cast(_cam_quat) * glm::dvec4(axis, 1)));
-						double angle = distance / (_screen_w * _mouse_sens) * 2*M_PI;
-						_obj_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _obj_quat;
-					} else if(_key_shift == 1) {
-						_cam_up = glm::dvec3(glm::mat4_cast(_cam_quat) * glm::vec4(0, 0, 1, 1));
-						glm::dvec3 axis = glm::dvec3(0, 0, _cam_up[2] > 0 ? -1 : 1);
-						double angle = motion->xrel / (_screen_w * _mouse_sens) * 2*M_PI;
-						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
-					} else {
-						double distance = glm::length(glm::vec2(motion->xrel, -motion->yrel));
-						glm::dvec3 axis = glm::normalize(glm::dvec3(0, -motion->yrel, -motion->xrel));
-						axis = glm::normalize(glm::dvec3(glm::mat4_cast(_cam_quat) * glm::dvec4(axis, 1)));
-						double angle = distance / (_screen_w * _mouse_sens) * 2*M_PI;
-						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
-					}
-				}
-				_mouse_x = motion->x; _mouse_y = motion->y;
-				break;
 
+			case SDL_MOUSEMOTION:
+				mx = motion->x; my = motion->y;
+				if(_rb_state == 1) {
+					_r_z = fmod1(_r_z - _camera_up[2] * (mx - _pm_x) / (_window_w*_sensitivity) * 2*M_PI, 2*M_PI);
+					_r_xy = fmod1(_r_xy + (my - _pm_y) / (_window_w*_sensitivity) * 2*M_PI, 2*M_PI);
+					_camera_view[2] = sin(_r_xy) * _radius;
+					_camera_view[0] = cos(_r_z) * cos(_r_xy) * _radius;
+					_camera_view[1] = sin(_r_z) * cos(_r_xy) * _radius;
+					_pm_x = mx; _pm_y = my;
+					if(_r_xy > M_PI/2 && _r_xy < 3*M_PI/2) _camera_up[2] = -1;
+					else _camera_up[2] = 1;
+				}
+
+				break;
 			case SDL_MOUSEBUTTONUP:
-				     if(button->button == SDL_BUTTON_LEFT)   _left_button = 0;
-				else if(button->button == SDL_BUTTON_RIGHT) _right_button = 0;
+				if(button->button == SDL_BUTTON_LEFT)  _lb_state = 0;
+				if(button->button == SDL_BUTTON_RIGHT) _rb_state = 0;
 				break;
 
 			case SDL_MOUSEBUTTONDOWN:
-				     if(button->button == SDL_BUTTON_LEFT)   _left_button = 1; 
-				else if(button->button == SDL_BUTTON_RIGHT) _right_button = 1;
-				_mouse_x = button->x; _mouse_y = button->y;
+				if(button->button == SDL_BUTTON_LEFT)  { _lb_state = 1; _pm_x = button->x; _pm_y = button->y; }
+				if(button->button == SDL_BUTTON_RIGHT) { _rb_state = 1; _pm_x = button->x; _pm_y = button->y; }
 				break;
 
 			case SDL_MOUSEWHEEL:
-				     if(button->x ==  1) _cam_radius /= _cam_zoom;
-				else if(button->x == -1) _cam_radius *= _cam_zoom;
-				//      if(button->x ==  1) _cam_fov = fmax(_cam_fov / _cam_zoom, M_PI/512);
-				// else if(button->x == -1) _cam_fov = fmin(_cam_fov * _cam_zoom, 3*M_PI/4);
+				if(button->x == 1) _radius /= _zoom_factor;
+				else if(button->x == -1) _radius *= _zoom_factor;
+				_camera_view[2] = sin(_r_xy) * _radius;
+				_camera_view[0] = cos(_r_z) * cos(_r_xy) * _radius;
+				_camera_view[1] = sin(_r_z) * cos(_r_xy) * _radius;
 				break;
 		}
 	}

@@ -30,8 +30,9 @@ bool projection_comparison(const Point* p1, const Point* p2) {
 
 struct Triangle
 {
+	int _normal;
 	Point *_v[3];
-	Triangle (Point *v1, Point *v2, Point *v3) : _v{v1, v2, v3} {}
+	Triangle (int normal, Point *v1, Point *v2, Point *v3) : _normal(normal), _v{v1, v2, v3} {}
 	~Triangle () {}
 };
 
@@ -103,6 +104,14 @@ struct pfv3d
 	/* === Define the optimisation orientation === */
 
 
+	/* === Call the visualiser === */
+	public:
+	void display () { _display.display_frontier(0, _minmax, _triangles); }
+	private:
+	void display_i () { _display.display_frontier(1, _minmax, _triangles); }
+	/* === Call the visualiser === */
+
+
 	/* === Clear frontier === */
 	private:
 	void clear_frontier ()
@@ -132,12 +141,20 @@ struct pfv3d
 	/* === Clear frontier === */
 
 
-	/* === Call the visualiser === */
+	/* === Clear all data === */
 	public:
-	void display () { _display.display_frontier(0, _points_0.size(), _triangles); }
-	private:
-	void display_i () { _display.display_frontier(1, _points_0.size(), _triangles); }
-	/* === Call the visualiser === */
+	void clear ()
+	{
+		for(_Tree_P0::iterator it =   _points_0.begin(); !it.is_sentinel(); ++it) delete *it;
+		for(_Tree_P0::iterator it = _vertices_0.begin(); !it.is_sentinel(); ++it) delete *it;
+		_points_0.clear(); _add_0.clear(); _rem_0.clear(); _vertices_0.clear(); _p_to_ts_0.clear();
+		_points_1.clear(); _add_1.clear(); _rem_1.clear(); _vertices_1.clear(); _p_to_ts_1.clear();
+		_points_2.clear(); _add_2.clear(); _rem_2.clear(); _vertices_2.clear(); _p_to_ts_2.clear();
+		_triangles.clear();
+		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
+		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
+	}
+	/* === Clear all data === */
 
 
 	/* === Add points to the frontier === */
@@ -710,7 +727,7 @@ struct pfv3d
 	private:
 	void add_triangle(Point *p, Point *p1, Point *p2, Point *p3, _Map_PTs &p_to_ts)
 	{
-		p_to_ts.insert({p, _triangles.insert(_triangles.end(), Triangle(p1, p2, p3))});
+		p_to_ts.insert({p, _triangles.insert(_triangles.end(), Triangle(_po[2], p1, p2, p3))});
 		++p1->_n_tri; ++p2->_n_tri; ++p3->_n_tri;
 	}
 	/* === Add triangle === */
