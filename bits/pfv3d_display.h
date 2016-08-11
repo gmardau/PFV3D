@@ -25,8 +25,7 @@ class pfv3d_display
 	/* Window */
 	SDL_Window *_window;
 	SDL_GLContext _context;
-	int _window_w, _window_h;
-	int _screen_w, _screen_h;
+	int _window_w, _window_h, _screen_w, _screen_h, _program;
 
 	/* Thread */
 	bool _running = 1;
@@ -34,16 +33,22 @@ class pfv3d_display
 	std::mutex _mutex_cond, _mutex_data;
 	std::condition_variable_any _cond_main, _cond_renderer;
 
-	/* Display */
-	int _program;
+	/* Object */
+	double _obj_span;
+	glm::dvec3 _obj_initial_look, _obj_look;
+	glm::dquat _obj_initial_quat, _obj_quat;
+	glm::dmat4 _obj_rotate, _obj_translate;
+
+	/* Camera */
 	double _cam_fov, _cam_radius, _cam_zoom = 1.1;
-	glm::dvec3 _cam_view, _cam_look, _cam_up, _obj_look;
-	glm::dquat _cam_quat, _obj_quat;
+	glm::dvec4 _cam_initial_view, _cam_initial_up = glm::vec4(0, 0, 1, 1);
+	glm::dvec3 _cam_initial_look, _cam_view, _cam_look, _cam_up;
+	glm::dquat _cam_initial_quat, _cam_quat;
+	glm::dmat4 _cam_rotate, _cam_translate;
 
 	/* Mouse */
 	bool _left_button = 0, _right_button = 0;
-	float _mouse_x, _mouse_y;
-	float _mouse_sens = 0.66;
+	double _mouse_x, _mouse_y, _mouse_sens = 0.66;
 
 	/* Keyboard */
 	bool _key_ctrl = 0, _key_alt = 0, _key_shift = 0;
@@ -51,7 +56,6 @@ class pfv3d_display
 	/* Flags and objects data */
 	bool _mode = 0;
 	uint _data[4] = {0, 0, 0, 0};
-	int _np, _nt;
 	/* === Variables === */
 
 	/* === Constructor/Destructor === */
@@ -106,20 +110,21 @@ class pfv3d_display
 			#version 330\n\
 			in vec3 f_normal;\
 			in vec3 f_position;\
+			uniform mat4 model;\
 			uniform vec4 light_colour;\
 			uniform vec4 object_colour;\
 			uniform vec3 view_position;\
 			out vec4 colour;\
 			void main(){\
 				vec3 direction = normalize(vec3(1, 2, 3));\
-				vec3 light_position = vec3(7.5, 7, 8);\
+				vec3 light_position = vec3(model * vec4(7.5, 7, 8, 1));\
 				vec3 light_direction = normalize(light_position-f_position);\
 				vec3 view_direction = normalize(view_position - f_position);\
 				vec3 reflect_direction = reflect(-light_direction, f_normal);\
 				float spec = pow(max(dot(view_direction, reflect_direction), 0.0), 32);\
 				\
 				vec4 ambient = 0.1f * light_colour;\
-				vec4 diffuse = max(dot(normalize(f_normal), direction), 0.0) * light_colour;\
+				vec4 diffuse = max(dot(normalize(f_normal), light_direction), 0.0) * light_colour;\
 				vec4 specular = 0.5f * spec * light_colour;\
 				\
 				colour = (ambient + diffuse) * object_colour;\
@@ -175,11 +180,11 @@ class pfv3d_display
 	{
 		if(triangles.empty()) {
 			_data[0] = 0;
-			_mode = mode;
 			_mutex_cond.lock();
 			_cond_renderer.notify_one();
-			if(_mode == 0) _cond_main.wait(_mutex_cond);
+			if(mode == 0) _cond_main.wait(_mutex_cond);
 			_mutex_cond.unlock();
+			_mode = 0;
 			return;
 		}
 		
@@ -213,30 +218,30 @@ class pfv3d_display
 		glVertexAttribPointer(1, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)(3*sizeof(double)));
 		glEnableVertexAttribArray(1);
 
-		/* Reposition the camera */
-		if(_mode == 0) {
-			for(i = 0; i < 3; ++i) _cam_look[i] = _obj_look[i] = (limits[i][0]+limits[i][1])/2.0;
-			if(minmax == 0) {
-				double angle = M_PI/4.0, angle_cos = cos(angle/2.0), angle_sin = sin(angle/2.0);
-				glm::dvec3 axis = glm::normalize(glm::vec3(0, 0, 1));
-				_cam_quat = glm::dquat(angle_cos, axis[0]*angle_sin, axis[1]*angle_sin, axis[2]*angle_sin);
-				axis = glm::normalize(glm::vec3(1, -1, 0));
-				_cam_quat = glm::dquat(angle_cos, axis[0]*angle_sin, axis[1]*angle_sin, axis[2]*angle_sin) * _cam_quat;
-			} else {
-				double angle = -3*M_PI/4.0, angle_cos = cos(angle/2.0), angle_sin = sin(angle/2.0);
-				glm::dvec3 axis = glm::normalize(glm::vec3(0, 0, 1));
-				_cam_quat = glm::dquat(angle_cos, axis[0]*angle_sin, axis[1]*angle_sin, axis[2]*angle_sin);
-				angle = -M_PI/4.0, angle_cos = cos(angle/2.0), angle_sin = sin(angle/2.0);
-				axis = glm::normalize(glm::vec3(-1, 1, 0));
-				_cam_quat = glm::dquat(angle_cos, axis[0]*angle_sin, axis[1]*angle_sin, axis[2]*angle_sin) * _cam_quat;
+		/* Initialise object and camera variables */
+		_obj_span = glm::distance(glm::dvec2(limits[0][1], limits[1][0]), glm::dvec2(limits[0][0], limits[1][1]));
+		_obj_span = fmax(glm::distance(glm::dvec3(limits[0][0], limits[1][0], limits[2][1]),
+		                              glm::dvec3(limits[0][1], limits[1][1], limits[2][0])), _obj_span);
+		
+		for(i = 0; i < 3; ++i) _obj_initial_look[i] = _cam_initial_look[i] = (limits[i][0]+limits[i][1])/2.0;
+		
+		_obj_initial_quat = glm::quat(1, 0, 0, 0);
+		if(minmax == 0) {
+			double angle = M_PI/4.0;
+			glm::dvec3 axis = glm::normalize(glm::vec3(0, 0, 1));
+			_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0));
+			axis = glm::normalize(glm::vec3(1, -1, 0));
+			_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_initial_quat;
+		} else {
+			double angle = -3*M_PI/4.0;
+			glm::dvec3 axis = glm::normalize(glm::vec3(0, 0, 1));
+			_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0));
+			angle = -M_PI/4.0;
+			axis = glm::normalize(glm::vec3(-1, 1, 0));
+			_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_initial_quat;
 			}
-			_obj_quat = glm::quat(1, 0, 0, 0);
-			_cam_fov = M_PI/4.0;
-			double span = glm::distance(glm::dvec2(limits[0][1], limits[1][0]), glm::dvec2(limits[0][0], limits[1][1]));
-			span = fmax(glm::distance(glm::dvec3(limits[0][0], limits[1][0], limits[2][1]),
-			                              glm::dvec3(limits[0][1], limits[1][1], limits[2][0])), span);
-			_cam_radius = span/2.0 / sin(_cam_fov/2.0) * 1.1;
-		}
+
+		if(_mode == 0) reset();
 
 		_mutex_data.unlock();
 
@@ -250,6 +255,22 @@ class pfv3d_display
 		_mutex_cond.unlock();
 	}
 	/* === Activate frontier display === */
+
+	/* === Reset object and camera variables === */
+	private:
+	void reset ()
+	{
+		_cam_fov = M_PI/4.0;
+		if(_window_w >= _window_h) _cam_radius = _obj_span/2.0 / sin(_cam_fov/2.0)                     * 1.1;
+		else                       _cam_radius = _obj_span/2.0 / sin(_cam_fov/2.0*_window_w/_window_h) * 1.1;
+		_cam_initial_view = glm::dvec4(_cam_radius, 0, 0, 1);
+
+		_obj_look = _obj_initial_look; _obj_translate = glm::translate(glm::dmat4(1), _obj_look);
+		_cam_look = _cam_initial_look; _cam_translate = glm::translate(glm::dmat4(1), _cam_look);
+		_obj_quat = _obj_initial_quat; _obj_rotate = glm::mat4_cast(_obj_quat);
+		_cam_quat = _cam_initial_quat; _cam_rotate = glm::mat4_cast(_cam_quat);
+	}
+	/* === Reset object and camera variables === */
 
 	/* === Renderer thread === */
 	private:
@@ -277,9 +298,7 @@ class pfv3d_display
 							keyboard(event); break;
 						case SDL_WINDOWEVENT:
 							if(event.window.event == SDL_WINDOWEVENT_RESIZED) {
-								_window_w = event.window.data1;
-								_window_h = event.window.data2;
-								// if(event.window.data1 < event.window.data2) _cam_radius *= 1+ 
+								_window_w = event.window.data1; _window_h = event.window.data2;
 							}
 							break;
 						case SDL_QUIT: rendering = 0; SDL_HideWindow(_window); break;
@@ -306,26 +325,11 @@ class pfv3d_display
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glViewport(0, 0, _window_w, _window_h);
 
-		/* Model transformation */
-		glm::dmat4 translate_obj1 = glm::translate(glm::dmat4(1), -_obj_look);
-		glm::dmat4 translate_obj2 = glm::translate(glm::dmat4(1), _obj_look);
-		glm::dmat4 rotate_obj = glm::mat4_cast(_obj_quat);
-		glm::mat4 model = glm::dmat4(1) * translate_obj2 * rotate_obj * translate_obj1;
-
-		/* View transformation */
-		glm::dvec4 initial_cam_view = glm::dvec4(_cam_radius, 0, 0, 1);
-		glm::vec4 initial_cam_up = glm::vec4(0, 0, 1, 1);
-		glm::dmat4 rotate_cam = glm::mat4_cast(_cam_quat);
-		glm::dmat4 translate_cam = glm::translate(glm::dmat4(1), _cam_look);
-		_cam_view = glm::dvec3(translate_cam * rotate_cam * initial_cam_view);
-		_cam_up = glm::dvec3(rotate_cam * initial_cam_up);
+		/* Matrix transformations - Model, View, Projection */
+		glm::mat4 model = glm::dmat4(1) * _obj_translate * _obj_rotate * glm::inverse(_obj_translate);
+		_cam_view = glm::dvec3(_cam_translate * _cam_rotate * _cam_initial_view);
+		_cam_up = glm::dvec3(_cam_rotate * _cam_initial_up);
 		glm::mat4 view = glm::lookAt(_cam_view, _cam_look, _cam_up);
-
-		// printf("%lf %lf %lf\n", _cam_view[0], _cam_view[1], _cam_view[2]);
-		// printf("%lf %lf %lf\n", _cam_look[0], _cam_look[1], _cam_look[2]);
-		// printf("%lf %lf %lf\n\n", _cam_up[0], _cam_up[1], _cam_up[2]);
-
-		/* Projection transformation */
 		glm::mat4 projection = glm::perspective(_cam_fov, (double)_window_w/_window_h, (double)0.1, (double)1000);
 
 		int      model_location = glGetUniformLocation(_program, "model");
@@ -367,6 +371,7 @@ class pfv3d_display
 	void keyboard (SDL_Event &event)
 	{
 		switch(event.key.keysym.sym) {
+			case SDLK_r: reset(); break;
 			case SDLK_LCTRL:  case SDLK_RCTRL:  _key_ctrl  = event.type == SDL_KEYUP ? 0 : 1; break;
 			case SDLK_LALT:   case SDLK_RALT:   _key_alt   = event.type == SDL_KEYUP ? 0 : 1; break;
 			case SDLK_LSHIFT: case SDLK_RSHIFT: _key_shift = event.type == SDL_KEYUP ? 0 : 1; break;
@@ -384,33 +389,38 @@ class pfv3d_display
 		switch(event.type) {
 			case SDL_MOUSEMOTION:
 				if(_left_button == 1) {
-					double span = sin(_cam_fov/2.0) * _cam_radius * 2;
-					glm::dvec4 translation = glm::dvec4(0, -motion->xrel*span/_window_h, motion->yrel*span/_window_h, 1);
+					double cpp = sin(_cam_fov/2.0) * _cam_radius * 2 / _window_h;
+					glm::dvec4 translation = glm::dvec4(0, -motion->xrel * cpp, motion->yrel*cpp, 1);
 					_cam_look += glm::dvec3(glm::mat4_cast(_cam_quat) * translation);
+					_cam_translate = glm::translate(glm::dmat4(1), _cam_look);
 				}
 				if(_right_button == 1) {
 					if(_key_ctrl == 1) {
-						glm::dvec3 axis = glm::normalize(glm::dvec3(glm::mat4_cast(_cam_quat)*glm::dvec4(_cam_radius,0,0,1)));
+						glm::dvec3 axis = glm::normalize(glm::dvec3(_cam_rotate * _cam_initial_view));
 						double angle = motion->xrel / (_screen_w * _mouse_sens) * 2*M_PI;
 						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
-						axis * 2.0;
+						_cam_rotate = glm::mat4_cast(_cam_quat);
 					} else if (_key_alt == 1) {
-						double distance = glm::length(glm::vec2(motion->xrel, -motion->yrel));
+						double distance = glm::length(glm::vec2(motion->xrel, motion->yrel));
 						glm::dvec3 axis = glm::normalize(glm::dvec3(0, motion->yrel, motion->xrel));
-						axis = glm::normalize(glm::dvec3(glm::mat4_cast(_cam_quat) * glm::dvec4(axis, 1)));
+						axis = glm::normalize(glm::dvec3(_cam_rotate * glm::dvec4(axis, 1)));
 						double angle = distance / (_screen_w * _mouse_sens) * 2*M_PI;
 						_obj_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _obj_quat;
+						_obj_rotate = glm::mat4_cast(_obj_quat);
 					} else if(_key_shift == 1) {
-						_cam_up = glm::dvec3(glm::mat4_cast(_cam_quat) * glm::vec4(0, 0, 1, 1));
-						glm::dvec3 axis = glm::dvec3(0, 0, _cam_up[2] > 0 ? -1 : 1);
+						glm::vec3 tmp_up = glm::vec3(glm::inverse(_cam_rotate) * _obj_rotate * _cam_initial_up);
+						glm::dvec3 axis = glm::dvec3(0, 0, tmp_up[2] > 0 ? -1 : 1);
+						axis = glm::normalize(glm::dvec3(_obj_rotate * glm::dvec4(axis, 1)));
 						double angle = motion->xrel / (_screen_w * _mouse_sens) * 2*M_PI;
 						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
+						_cam_rotate = glm::mat4_cast(_cam_quat);
 					} else {
 						double distance = glm::length(glm::vec2(motion->xrel, -motion->yrel));
 						glm::dvec3 axis = glm::normalize(glm::dvec3(0, -motion->yrel, -motion->xrel));
-						axis = glm::normalize(glm::dvec3(glm::mat4_cast(_cam_quat) * glm::dvec4(axis, 1)));
+						axis = glm::normalize(glm::dvec3(_cam_rotate * glm::dvec4(axis, 1)));
 						double angle = distance / (_screen_w * _mouse_sens) * 2*M_PI;
 						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
+						_cam_rotate = glm::mat4_cast(_cam_quat);
 					}
 				}
 				_mouse_x = motion->x; _mouse_y = motion->y;
@@ -430,6 +440,7 @@ class pfv3d_display
 			case SDL_MOUSEWHEEL:
 				     if(button->x ==  1) _cam_radius /= _cam_zoom;
 				else if(button->x == -1) _cam_radius *= _cam_zoom;
+				_cam_initial_view = glm::dvec4(_cam_radius, 0, 0, 1);
 				//      if(button->x ==  1) _cam_fov = fmax(_cam_fov / _cam_zoom, M_PI/512);
 				// else if(button->x == -1) _cam_fov = fmin(_cam_fov * _cam_zoom, 3*M_PI/4);
 				break;
