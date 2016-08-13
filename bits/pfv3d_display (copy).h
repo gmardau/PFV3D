@@ -3,7 +3,6 @@
 
 #include <signal.h>
 #include <math.h>
-#include <algorithm>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -57,8 +56,7 @@ class pfv3d_display
 	/* Flags and objects data */
 	bool _mode = 0;
 	uint _data[4] = {0, 0, 0, 0};
-	int *_indices = nullptr;
-	glm::dvec3 *_centres = nullptr;
+	double _centres[100000][3];
 	/* === Variables === */
 
 	/* === Constructor/Destructor === */
@@ -89,8 +87,8 @@ class pfv3d_display
 		glewInit();
 
 		/* Open GL */
-		glEnable(GL_BLEND);
-		glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		// glEnable(GL_BLEND);
+		// glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glEnable(GL_MULTISAMPLE);
 		glEnable(GL_DEPTH_TEST);
 
@@ -119,13 +117,12 @@ class pfv3d_display
 			in vec3 f_normal;\
 			in vec3 f_position;\
 			uniform mat4 model;\
-			uniform mat4 obj_rotate;\
 			uniform vec4 light_colour;\
 			uniform vec4 object_colour;\
 			uniform vec3 view_position;\
 			out vec4 colour;\
 			void main(){\
-				vec3 direction = normalize(vec3(obj_rotate * vec4(1, 2, 3, 1)));\
+				vec3 direction = normalize(vec3(1, 2, 3));\
 				vec3 light_position = vec3(model * vec4(7.5, 7, 8, 1));\
 				vec3 light_direction = normalize(light_position-f_position);\
 				vec3 view_direction = normalize(view_position - f_position);\
@@ -198,24 +195,21 @@ class pfv3d_display
 		}
 		
 		/* Get data */
-		// size_t size_indices = triangles.size()*3*sizeof(int);
+		size_t size_indices = triangles.size()*3*sizeof(int);
 		size_t size_vertices = triangles.size()*3*3*2*sizeof(double);
-		int i, j, v = 0, t = 0, c = 0;//, *indices = (int*) malloc(size_indices);
+		int i, j, v = 0, t = 0, *indices = (int*) malloc(size_indices);
 		double limits[3][2] = {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}},
-		       normal[3], *vertices = (double*) malloc(size_vertices), centre[3];
-		_centres = (glm::dvec3 *) realloc(_centres, triangles.size()*sizeof(glm::dvec3));
+		       normal[3], *vertices = (double*) malloc(size_vertices);
 		for(_List_T::iterator it = triangles.begin(); it != triangles.end(); ++it) {
 			normal[0] = normal[1] = normal[2] = 0; normal[it->_normal] = 1;
-			centre[0] = centre[1] = centre[2] = 0;
 			for(i = 0; i < 3; ++i, ++t) {
 				for(j = 0; j < 3; ++j, ++v) {
-					centre[j] += vertices[v] = it->_v[i]->_x[j];
+					vertices[v] = it->_v[i]->_x[j];
 					if(vertices[v] < limits[j][0]) limits[j][0] = vertices[v];
 					if(vertices[v] > limits[j][1]) limits[j][1] = vertices[v]; }
 				for(j = 0; j < 3; ++j, ++v) vertices[v] = normal[j];
-				// indices[t] = t;
+				indices[t] = t;
 			}
-			_centres[c++] = glm::dvec3(centre[0]/3.0, centre[1]/3.0, centre[2]/3.0);
 		}
 
 		_mutex_data.lock();
@@ -223,8 +217,8 @@ class pfv3d_display
 		/* Bind data */
 		glBindBuffer(GL_ARRAY_BUFFER, _data[2]);
 		glBufferData(GL_ARRAY_BUFFER, size_vertices, vertices, GL_STATIC_DRAW);
-		// glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[3]);
-	 //    glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_indices, indices, GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[3]);
+	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_indices, indices, GL_STATIC_DRAW);
 		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)0);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(1, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)(3*sizeof(double)));
@@ -251,11 +245,9 @@ class pfv3d_display
 
 		_mutex_data.unlock();
 
+		free(indices); free(vertices);
+
 		_data[0] = triangles.size()*3;
-		blend_sort();
-
-		/*free(indices);*/ free(vertices);
-
 		_mode = mode;
 		_mutex_cond.lock();
 		_cond_renderer.notify_one();
@@ -279,31 +271,6 @@ class pfv3d_display
 		_cam_quat = _cam_initial_quat; _cam_rotate = glm::mat4_cast(_cam_quat);
 	}
 	/* === Reset object and camera variables === */
-
-	/* === Sort triangles by distance to the camera === */
-	private:
-	void blend_sort ()
-	{
-		int i, j;
-		double *distances = (double *) malloc(_data[0]/3*sizeof(double));
-		int *indices = (int *) malloc(_data[0]/3*sizeof(int));
-		_cam_view = glm::dvec3(_cam_translate * _cam_rotate * _cam_initial_view);
-
-		for(i = 0; i < (int)_data[0]/3; ++i) {
-			indices[i] = i;
-			distances[i] = glm::distance(glm::dvec3(_obj_rotate * glm::dvec4(_centres[i], 1)), _cam_view);
-		}
-		std::sort(&indices[0], &indices[_data[0]/3],[&](size_t a, size_t b) { return distances[a] > distances[b]; } );
-
-		_indices = (int *) realloc(_indices, _data[0]*sizeof(int));
-		for(i = 0; i < (int)_data[0]/3; ++i) for(j = 0; j < 3; ++j) _indices[i*3+j] = indices[i]*3+j;
-
-		_mutex_data.lock();
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[3]);
-	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, _data[0]*sizeof(int), _indices, GL_STATIC_DRAW);
-		_mutex_data.unlock();
-	}
-	/* === Sort triangles by distance to the camera === */
 
 	/* === Renderer thread === */
 	private:
@@ -365,9 +332,6 @@ class pfv3d_display
 		glm::mat4 view = glm::lookAt(_cam_view, _cam_look, _cam_up);
 		glm::mat4 projection = glm::perspective(_cam_fov, (double)_window_w/_window_h, (double)0.1, (double)1000);
 
-		int obj_rotate_location = glGetUniformLocation(_program, "obj_rotate");
-		glUniformMatrix4fv(obj_rotate_location, 1, GL_FALSE, &glm::mat4(_obj_rotate)[0][0]);
-
 		int      model_location = glGetUniformLocation(_program, "model");
 		int       view_location = glGetUniformLocation(_program, "view");
 		int projection_location = glGetUniformLocation(_program, "projection");
@@ -383,7 +347,7 @@ class pfv3d_display
 		// glUniform4f(object_colour_location, 1, 0.3, 0.1, 1);
 		// glUniform4f(object_colour_location, 0.1, 1, 0.2, 1);
 		// glUniform4f(object_colour_location, 0.2, 0.5, 1, 1);
-		glUniform4f(object_colour_location, 0.05, 0.1, 1, 0.7);
+		glUniform4f(object_colour_location, 0.05, 0.1, 1, 1);
 		// glUniform4f(object_colour_location, 0.75, 0.75, 0.75, 1);
 		// glUniform4f(object_colour_location, 1, 0.85, 0, 1);
 		/* Light Colour */
@@ -435,7 +399,6 @@ class pfv3d_display
 					glm::dvec4 translation = glm::dvec4(0, -motion->xrel * cpp, motion->yrel*cpp, 1);
 					_cam_look += glm::dvec3(glm::mat4_cast(_cam_quat) * translation);
 					_cam_translate = glm::translate(glm::dmat4(1), _cam_look);
-					blend_sort();
 				}
 				if(_right_button == 1) {
 					if(_key_ctrl == 1) {
@@ -443,7 +406,6 @@ class pfv3d_display
 						double angle = motion->xrel / (_screen_w * _mouse_sens) * 2*M_PI;
 						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
 						_cam_rotate = glm::mat4_cast(_cam_quat);
-						blend_sort();
 					} else if (_key_alt == 1) {
 						double distance = glm::length(glm::vec2(motion->xrel, motion->yrel));
 						glm::dvec3 axis = glm::normalize(glm::dvec3(0, motion->yrel, motion->xrel));
@@ -451,7 +413,6 @@ class pfv3d_display
 						double angle = distance / (_screen_w * _mouse_sens) * 2*M_PI;
 						_obj_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _obj_quat;
 						_obj_rotate = glm::mat4_cast(_obj_quat);
-						blend_sort();
 					} else if(_key_shift == 1) {
 						glm::vec3 tmp_up = glm::vec3(glm::inverse(_cam_rotate) * _obj_rotate * _cam_initial_up);
 						glm::dvec3 axis = glm::dvec3(0, 0, tmp_up[2] > 0 ? -1 : 1);
@@ -459,7 +420,6 @@ class pfv3d_display
 						double angle = motion->xrel / (_screen_w * _mouse_sens) * 2*M_PI;
 						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
 						_cam_rotate = glm::mat4_cast(_cam_quat);
-						blend_sort();
 					} else {
 						double distance = glm::length(glm::vec2(motion->xrel, -motion->yrel));
 						glm::dvec3 axis = glm::normalize(glm::dvec3(0, -motion->yrel, -motion->xrel));
@@ -467,7 +427,6 @@ class pfv3d_display
 						double angle = distance / (_screen_w * _mouse_sens) * 2*M_PI;
 						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
 						_cam_rotate = glm::mat4_cast(_cam_quat);
-						blend_sort();
 					}
 				}
 				_mouse_x = motion->x; _mouse_y = motion->y;
