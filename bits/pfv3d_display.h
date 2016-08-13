@@ -124,7 +124,7 @@ class pfv3d_display
 				float spec = pow(max(dot(view_direction, reflect_direction), 0.0), 32);\
 				\
 				vec4 ambient = 0.1f * light_colour;\
-				vec4 diffuse = max(dot(normalize(f_normal), light_direction), 0.0) * light_colour;\
+				vec4 diffuse = max(dot(normalize(f_normal), direction), 0.0) * light_colour;\
 				vec4 specular = 0.5f * spec * light_colour;\
 				\
 				colour = (ambient + diffuse) * object_colour;\
@@ -176,7 +176,7 @@ class pfv3d_display
 
 	/* === Activate frontier display === */
 	public:
-	void display_frontier (bool mode, int minmax, _List_T &triangles)
+	void display_frontier (bool mode, bool minmax[3], _List_T &triangles)
 	{
 		if(triangles.empty()) {
 			_data[0] = 0;
@@ -199,8 +199,8 @@ class pfv3d_display
 			for(i = 0; i < 3; ++i, ++t) {
 				for(j = 0; j < 3; ++j, ++v) {
 					vertices[v] = it->_v[i]->_x[j];
-					if(vertices[v] < limits[i][0]) limits[i][0] = vertices[v];
-					if(vertices[v] > limits[i][1]) limits[i][1] = vertices[v]; }
+					if(vertices[v] < limits[j][0]) limits[j][0] = vertices[v];
+					if(vertices[v] > limits[j][1]) limits[j][1] = vertices[v]; }
 				for(j = 0; j < 3; ++j, ++v) vertices[v] = normal[j];
 				indices[t] = t;
 			}
@@ -226,20 +226,14 @@ class pfv3d_display
 		for(i = 0; i < 3; ++i) _obj_initial_look[i] = _cam_initial_look[i] = (limits[i][0]+limits[i][1])/2.0;
 		
 		_obj_initial_quat = glm::quat(1, 0, 0, 0);
-		if(minmax == 0) {
-			double angle = M_PI/4.0;
-			glm::dvec3 axis = glm::normalize(glm::vec3(0, 0, 1));
-			_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0));
-			axis = glm::normalize(glm::vec3(1, -1, 0));
-			_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_initial_quat;
-		} else {
-			double angle = -3*M_PI/4.0;
-			glm::dvec3 axis = glm::normalize(glm::vec3(0, 0, 1));
-			_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0));
-			angle = -M_PI/4.0;
-			axis = glm::normalize(glm::vec3(-1, 1, 0));
-			_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_initial_quat;
-			}
+		double angle; glm::dvec3 axis = glm::vec3(0, 1, 0);
+		if(minmax[2] == 0) angle = -M_PI/4.0;
+		else               angle =  M_PI/4.0;
+		_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0));
+		axis[1] = 0; axis[2] = 1; angle = M_PI/4.0;
+		if(minmax[1] == 1) angle += M_PI;
+		if(minmax[0] != minmax[1]) angle += M_PI/2.0;
+		_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_initial_quat;
 
 		if(_mode == 0) reset();
 
@@ -358,6 +352,11 @@ class pfv3d_display
 		// glBindVertexArray(_data[1]);
 		glDrawElements(GL_TRIANGLES, _data[0], GL_UNSIGNED_INT, 0);
 		// glBindVertexArray(0);
+
+		// glLineWidth(2);
+		// glUniform4f(object_colour_location, 1, 1, 1, 1);
+		// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		// glDrawElements(GL_TRIANGLES, _data[0], GL_UNSIGNED_INT, 0);
 
 		glUseProgram(0);
 		SDL_GL_SwapWindow(_window);

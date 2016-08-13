@@ -14,10 +14,12 @@ example4: example4.cpp
 	$(CC) $(-CC) $(-GL) example4.cpp -o example4
 example5: example5.cpp
 	$(CC) $(-CC) $(-GL) example5.cpp -o example5
+example6: example6.cpp
+	$(CC) $(-CC) $(-GL) example6.cpp -o example6
 
-all: example1 example2 example3 example4 example5
+all: example1 example2 example3 example4 example5 example6
 
 clean:
-	rm -f example1 example2 example3 example4 example5
+	rm -f example1 example2 example3 example4 example5 example6
 
-.PHONY: example1 example2 example3 example4 example5
+.PHONY: example1 example2 example3 example4 example5 example6

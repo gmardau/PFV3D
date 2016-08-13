@@ -7,7 +7,7 @@ int main(int argc, char const *argv[])
 {
 	int n_points, i;
 	double **points;
-	pfv3d visualiser;
+	pfv3d visualiser(1, 1, 1);
 	FILE *f = fopen("Input/surf05-500.dat", "r");
 
 	fscanf(f, "%d", &n_points);
@@ -17,6 +17,8 @@ int main(int argc, char const *argv[])
 		points[i] = (double *) malloc(3 * sizeof(double));
 		fscanf(f, "%lf %lf %lf", &points[i][0], &points[i][1], &points[i][2]);
 	}
+	
+	fclose(f);
 
 	std::random_shuffle(&points[0], &points[n_points]);
 
