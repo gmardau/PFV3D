@@ -357,8 +357,8 @@ struct pfv3d
 
 		/* Call each coordinate sweep */
 		_po[0] = 1; _po[1] = 2; _po[2] = 0; sweep(0);
-		_po[0] = 2; _po[1] = 0; _po[2] = 1;	sweep(1);
-		_po[0] = 0; _po[1] = 1; _po[2] = 2;	sweep(2);
+		_po[0] = 2; _po[1] = 0; _po[2] = 1; sweep(1);
+		_po[0] = 0; _po[1] = 1; _po[2] = 2; sweep(2);
 
 		/* Remove non optimal points */
 		for(_Set_P::iterator it = _non_optimal.begin(); it != _non_optimal.end(); it = _non_optimal.begin()) {
