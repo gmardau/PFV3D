@@ -31,7 +31,7 @@ class pfv3d_display
 	/* Thread */
 	bool _running = 1;
 	std::thread _renderer;
-	std::mutex _mutex_cond, _mutex_data;
+	std::recursive_mutex _mutex_cond, _mutex_data;
 	std::condition_variable_any _cond_main, _cond_renderer;
 
 	/* Object */
@@ -125,12 +125,12 @@ class pfv3d_display
 			uniform vec3 view_position;\
 			out vec4 colour;\
 			void main(){\
-				vec3 direction = normalize(vec3(obj_rotate * vec4(1, 2, 3, 1)));\
+				vec3 direction = normalize(vec3(obj_rotate * vec4(1.25, 2, 2.75, 1)));\
 				vec3 light_position = vec3(model * vec4(7.5, 7, 8, 1));\
 				vec3 light_direction = normalize(light_position-f_position);\
 				vec3 view_direction = normalize(view_position - f_position);\
 				vec3 reflect_direction = reflect(-light_direction, f_normal);\
-				float spec = pow(max(dot(view_direction, reflect_direction), 0.0), 32);\
+				float spec = pow(max(dot(view_direction, reflect_direction), 0.0), 2);\
 				\
 				vec4 ambient = 0.1f * light_colour;\
 				vec4 diffuse = max(dot(normalize(f_normal), direction), 0.0) * light_colour;\
@@ -249,10 +249,10 @@ class pfv3d_display
 		
 		if(_mode == 0) reset();
 
-		_mutex_data.unlock();
-
 		_data[0] = triangles.size()*3;
 		blend_sort();
+
+		_mutex_data.unlock();
 
 		/*free(indices);*/ free(vertices);
 
@@ -284,6 +284,7 @@ class pfv3d_display
 	private:
 	void blend_sort ()
 	{
+		_mutex_data.lock();
 		int i, j;
 		double *distances = (double *) malloc(_data[0]/3*sizeof(double));
 		int *indices = (int *) malloc(_data[0]/3*sizeof(int));
@@ -298,7 +299,6 @@ class pfv3d_display
 		_indices = (int *) realloc(_indices, _data[0]*sizeof(int));
 		for(i = 0; i < (int)_data[0]/3; ++i) for(j = 0; j < 3; ++j) _indices[i*3+j] = indices[i]*3+j;
 
-		_mutex_data.lock();
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[3]);
 	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, _data[0]*sizeof(int), _indices, GL_STATIC_DRAW);
 		_mutex_data.unlock();
@@ -383,7 +383,7 @@ class pfv3d_display
 		// glUniform4f(object_colour_location, 1, 0.3, 0.1, 1);
 		// glUniform4f(object_colour_location, 0.1, 1, 0.2, 1);
 		// glUniform4f(object_colour_location, 0.2, 0.5, 1, 1);
-		glUniform4f(object_colour_location, 0.05, 0.1, 1, 0.7);
+		glUniform4f(object_colour_location, 0.05, 0.1, 1, 0.8);
 		// glUniform4f(object_colour_location, 0.75, 0.75, 0.75, 1);
 		// glUniform4f(object_colour_location, 1, 0.85, 0, 1);
 		/* Light Colour */

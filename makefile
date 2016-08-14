@@ -2,7 +2,7 @@ CC = g++
 -CC = -Wall -ansi -pedantic -lm -g -lpthread -std=c++11
 -GL = -lGLEW -lGLU -lGL -lSDL2 -lX11
 
-default: example1
+default: all
 
 example1: example1.cpp
 	$(CC) $(-CC) $(-GL) example1.cpp -o example1

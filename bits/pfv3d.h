@@ -7,73 +7,82 @@
 #include <unordered_set>
 #include <unordered_map>
 
-struct Point
-{
-	bool _optimal;
-	int _state, _n_tri;
+/* === Point structure === */
+struct Point {
+	bool _input;
+	int _state = 1, _n_tri = 0;
 	double _x[3];
-	Point (double x1, double x2, double x3, bool optimal = 0) : _optimal(optimal), _state(1), _n_tri(0), _x{x1, x2, x3} {}
-	Point (double *x, bool optimal = 0) : _optimal(optimal), _state(1), _n_tri(0), _x{x[0], x[1], x[2]} {}
-};
-std::function<bool(double,double)> _oo[3];
-/* === Point compare function === */
-struct point_comparison {
-	int _x1, _x2, _x3;
-	point_comparison () {}
-	point_comparison (int x1, int x2, int x3) : _x1(x1), _x2(x2), _x3(x3) {}
-	bool operator()(const Point *p1, const Point *p2) {
-		if(_oo[_x1](p1->_x[_x1], p2->_x[_x1])) return 1;; if(_oo[_x1](p2->_x[_x1], p1->_x[_x1])) return 0;
-		if(_oo[_x2](p1->_x[_x2], p2->_x[_x2])) return 1;; if(_oo[_x2](p2->_x[_x2], p1->_x[_x2])) return 0;
-		if(_oo[_x3](p1->_x[_x3], p2->_x[_x3])) return 1;; return 0; } };
-/* === Point compare function === */
-
-struct Triangle
-{
+	Point (double x1, double x2, double x3, bool input = 0) : _input(input), _x{x1, x2, x3} {}
+	Point (double *x, bool input = 0) : _input(input), _x{x[0], x[1], x[2]} {} };
+/* === Point structure === */
+/* === Triangle structure === */
+struct Triangle {
 	int _normal;
 	Point *_v[3];
-	Triangle (int normal, Point *v1, Point *v2, Point *v3) : _normal(normal), _v{v1, v2, v3} {}
-	~Triangle () {}
-};
+	Triangle (int normal, Point *v1, Point *v2, Point *v3) : _normal(normal), _v{v1, v2, v3} {} };
+/* === Triangle structure === */
 
 #include "pfv3d_display.h"
 
 struct pfv3d
 {
+	typedef std::function<bool (double, double)> _Bin_Func;
+
+	/* === Point compare function === */
+	struct point_compare {
+		_Bin_Func *_oo;
+		int _x1, _x2, _x3;
+		point_compare (_Bin_Func *oo, int x1, int x2, int x3) : _oo(oo), _x1(x1), _x2(x2), _x3(x3) {}
+		bool operator() (const Point *p1, const Point *p2) {
+			if(_oo[_x1](p1->_x[_x1], p2->_x[_x1])) return 1;
+			if(_oo[_x1](p2->_x[_x1], p1->_x[_x1])) return 0;
+			if(_oo[_x2](p1->_x[_x2], p2->_x[_x2])) return 1;
+			if(_oo[_x2](p2->_x[_x2], p1->_x[_x2])) return 0;
+			if(_oo[_x3](p1->_x[_x3], p2->_x[_x3])) return 1;
+			return 0; } };
+	/* === Point compare function === */
 	/* === Projection compare function === */
-	struct projection_comparison {
-		int _po[3];
-		bool operator()(const Point* p1, const Point* p2) {
-			if(_oo[_po[0]](p1->_x[_po[0]],p2->_x[_po[0]])) return 1;; if(_oo[_po[0]](p2->_x[_po[0]],p1->_x[_po[0]])) return 0;
-			if(_oo[_po[1]](p1->_x[_po[1]],p2->_x[_po[1]])) return 1;; if(_oo[_po[1]](p2->_x[_po[1]],p1->_x[_po[1]])) return 0;
-			if(_oo[_po[2]](p1->_x[_po[2]],p2->_x[_po[2]])) return 1;; return 0; } };
+	struct projection_compare {
+		_Bin_Func *_oo;
+		int *_po;
+		projection_compare (_Bin_Func *oo, int *po) : _oo(oo), _po(po) {}
+		bool operator() (const Point* p1, const Point* p2) {
+			if(_oo[_po[0]](p1->_x[_po[0]],p2->_x[_po[0]])) return 1;
+			if(_oo[_po[0]](p2->_x[_po[0]],p1->_x[_po[0]])) return 0;
+			if(_oo[_po[1]](p1->_x[_po[1]],p2->_x[_po[1]])) return 1;
+			if(_oo[_po[1]](p2->_x[_po[1]],p1->_x[_po[1]])) return 0;
+			if(_oo[_po[2]](p1->_x[_po[2]],p2->_x[_po[2]])) return 1;
+			return 0; } };
 	/* === Projection compare function === */
+
 
 	#define DMAX std::numeric_limits<double>::max()
 	#define DMIN std::numeric_limits<double>::lowest()
-	#define _po _projection_comparison._po
-	typedef tree<tree_avl, Point *, point_comparison> _Tree_P;
-	typedef tree<tree_avl, Point *, projection_comparison> _Tree_Proj;
-	typedef std::unordered_set<Point *> _Set_P;
+	typedef tree<tree_avl, Point *, point_compare> _Tree_P;
+	typedef tree<tree_avl, Point *, projection_compare> _Tree_Proj;
+	typedef std::unordered_set<Point *> _USet_P;
 	typedef std::list<Triangle> _List_T;
-	typedef std::unordered_multimap<Point *, _List_T::iterator> _Map_PTs;
+	typedef std::unordered_multimap<Point *, _List_T::iterator> _UMap_PTs;	
+
 
 	/* === Variables === */
 	bool _minmax[3];
-	int _display_mode;
-	double _limits[3][2], _extremes[3];
+	int _display_mode, _po[3];
+	double _limits[3][2] = {{DMIN, DMAX}, {DMIN, DMAX}, {DMIN, DMAX}}, _extremes[3];
+	_Bin_Func _oo[3];
 
-	point_comparison _point_comparison[3] = {point_comparison(0,1,2), point_comparison(1,2,0), point_comparison(2,0,1)};
-	_Tree_P _points[3]   = {_Tree_P(_point_comparison[0]), _Tree_P(_point_comparison[1]), _Tree_P(_point_comparison[2])};
-	_Tree_P _add[3]      = {_Tree_P(_point_comparison[0]), _Tree_P(_point_comparison[1]), _Tree_P(_point_comparison[2])};
-	_Tree_P _rem[3]      = {_Tree_P(_point_comparison[0]), _Tree_P(_point_comparison[1]), _Tree_P(_point_comparison[2])};
-	_Tree_P _vertices[3] = {_Tree_P(_point_comparison[0]), _Tree_P(_point_comparison[1]), _Tree_P(_point_comparison[2])};
+	point_compare _p_comp[3] = {point_compare(_oo,0,1,2), point_compare(_oo,1,2,0), point_compare(_oo,2,0,1)};
+	_Tree_P _points[3]   = {_Tree_P(_p_comp[0]), _Tree_P(_p_comp[1]), _Tree_P(_p_comp[2])};
+	_Tree_P _add[3]      = {_Tree_P(_p_comp[0]), _Tree_P(_p_comp[1]), _Tree_P(_p_comp[2])};
+	_Tree_P _rem[3]      = {_Tree_P(_p_comp[0]), _Tree_P(_p_comp[1]), _Tree_P(_p_comp[2])};
+	_Tree_P _vertices[3] = {_Tree_P(_p_comp[0]), _Tree_P(_p_comp[1]), _Tree_P(_p_comp[2])};
 
-	projection_comparison _projection_comparison;
-	_Tree_Proj _projection = _Tree_Proj(_projection_comparison);
+	projection_compare _proj_comp = projection_compare(_oo, _po);
+	_Tree_Proj _projection = _Tree_Proj(_proj_comp);
 
-	_Set_P _non_optimal;
+	_USet_P _non_optimal;
 	_List_T _triangles;
-	_Map_PTs _p_to_ts[3];
+	_UMap_PTs _p_to_ts[3];
 
 	pfv3d_display _display;
 	/* === Variables === */
@@ -82,7 +91,7 @@ struct pfv3d
 	/* === Constructor/Destructor === */
 	public:
 	pfv3d () : pfv3d(0, 0, 0) {}
-	pfv3d (bool mm_0, bool mm_1, bool mm_2) : _minmax{mm_0, mm_1, mm_2}, _limits{{DMIN, DMAX}, {DMIN, DMAX}, {DMIN, DMAX}}
+	pfv3d (bool mm_0, bool mm_1, bool mm_2) : _minmax{mm_0, mm_1, mm_2}
 	{
 		for(int i = 0; i < 3; ++i) {
 			if(_minmax[i] == 0) { _extremes[i] = DMAX; _oo[i] = std::less   <double>(); }
@@ -95,6 +104,14 @@ struct pfv3d
 		for(_Tree_P::iterator it = _vertices[0].begin(); !it.is_sentinel(); ++it) delete *it;
 	}
 	/* === Constructor/Destructor === */
+
+
+	/* === Call the visualiser === */
+	public:
+	void display () { _display.display_frontier(0, _minmax, _triangles); }
+	private:
+	void display_i () { _display.display_frontier(1, _minmax, _triangles); }
+	/* === Call the visualiser === */
 
 
 	/* === Define the optimisation orientation === */
@@ -132,27 +149,19 @@ struct pfv3d
 	/* === Define the optimisation orientation === */
 
 
-	/* === Reorder trees === */
-	private:
-	void reorder ()
-	{
-		_Tree_P::iterator it;
-		for(int i = 0; i < 3; ++i) {
-			  _points[i].clear(); for(it =   _points[(i+1)%3].begin(); !it.is_sentinel(); ++it)   _points[i].insert(*it);
-			     _add[i].clear(); for(it =      _add[(i+1)%3].begin(); !it.is_sentinel(); ++it)      _add[i].insert(*it);
-			     _rem[i].clear(); for(it =      _rem[(i+1)%3].begin(); !it.is_sentinel(); ++it)      _rem[i].insert(*it);
-			_vertices[i].clear(); for(it = _vertices[(i+1)%3].begin(); !it.is_sentinel(); ++it) _vertices[i].insert(*it);
-		}
-	}
-	/* === Reorder trees === */
-
-
-	/* === Call the visualiser === */
+	/* === Clear all data === */
 	public:
-	void display () { _display.display_frontier(0, _minmax, _triangles); }
-	private:
-	void display_i () { _display.display_frontier(1, _minmax, _triangles); }
-	/* === Call the visualiser === */
+	void clear ()
+	{
+		for(_Tree_P::iterator it =   _points[0].begin(); !it.is_sentinel(); ++it) delete *it;
+		for(_Tree_P::iterator it = _vertices[0].begin(); !it.is_sentinel(); ++it) delete *it;
+		for(int i = 0; i < 3; ++i)
+			{ _points[i].clear(); _add[i].clear(); _rem[i].clear(); _vertices[i].clear(); _p_to_ts[i].clear(); }
+		_triangles.clear();
+		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
+		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
+	}
+	/* === Clear all data === */
 
 
 	/* === Clear frontier === */
@@ -185,27 +194,27 @@ struct pfv3d
 	/* === Clear frontier === */
 
 
-	/* === Clear all data === */
-	public:
-	void clear ()
+	/* === Reorder trees === */
+	private:
+	void reorder ()
 	{
-		for(_Tree_P::iterator it =   _points[0].begin(); !it.is_sentinel(); ++it) delete *it;
-		for(_Tree_P::iterator it = _vertices[0].begin(); !it.is_sentinel(); ++it) delete *it;
-		for(int i = 0; i < 3; ++i)
-			{ _points[i].clear(); _add[i].clear(); _rem[i].clear(); _vertices[i].clear(); _p_to_ts[i].clear(); }
-		_triangles.clear();
-		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
-		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
+		_Tree_P::iterator it;
+		for(int i = 0; i < 3; ++i) {
+			  _points[i].clear(); for(it =   _points[(i+1)%3].begin(); !it.is_sentinel(); ++it)   _points[i].insert(*it);
+			     _add[i].clear(); for(it =      _add[(i+1)%3].begin(); !it.is_sentinel(); ++it)      _add[i].insert(*it);
+			     _rem[i].clear(); for(it =      _rem[(i+1)%3].begin(); !it.is_sentinel(); ++it)      _rem[i].insert(*it);
+			_vertices[i].clear(); for(it = _vertices[(i+1)%3].begin(); !it.is_sentinel(); ++it) _vertices[i].insert(*it);
+		}
 	}
-	/* === Clear all data === */
+	/* === Reorder trees === */
 
 
 	/* === Add points to the frontier === */
 	public:
 	void add_point (double x1, double x2, double x3) { double p[3] = {x1, x2, x3}; add_points(1, p); }
-	void add_point (double point[]) { add_points(1, point); }
+	void add_point (double *point) { add_points(1, point); }
 	void add_points (int n, double points[][3]) { add_points(n, &points[0][0]); }
-	void add_points (int n, double points[])
+	void add_points (int n, double *points)
 	{
 		Point *tmp, *p;
 		for(int i = 0; i < n*3; i += 3) {
@@ -228,13 +237,12 @@ struct pfv3d
 	}
 	/* === Add points to the frontier === */
 
-
 	/* === Remove points from the frontier === */
 	public:
 	void rem_point (double x1, double x2, double x3) { double p[3] = {x1, x2, x3}; rem_points(1, p); }
-	void rem_point (double point[]) { rem_points(1, point); }
+	void rem_point (double *point) { rem_points(1, point); }
 	void rem_points (int n, double points[][3]) { rem_points(n, &points[0][0]); }
-	void rem_points (int n, double points[])
+	void rem_points (int n, double *points)
 	{
 		Point *tmp, *p;
 		for(int i = 0; i < n*3; i += 3) {
@@ -361,7 +369,7 @@ struct pfv3d
 		_po[0] = 0; _po[1] = 1; _po[2] = 2; sweep(2);
 
 		/* Remove non optimal points */
-		for(_Set_P::iterator it = _non_optimal.begin(); it != _non_optimal.end(); it = _non_optimal.begin()) {
+		for(_USet_P::iterator it = _non_optimal.begin(); it != _non_optimal.end(); it = _non_optimal.begin()) {
 			for(i = 0; i < 3; ++i) _points[i].erase(*it);
 			if((*it)->_state == 1) for(i = 0; i < 3; ++i) _add[i].erase(*it);
 			delete *it; _non_optimal.erase(it); }
@@ -599,7 +607,6 @@ struct pfv3d
 	}
 	/* === Add vertex === */
 
-
 	/* === Add triangle === */
 	private:
 	void add_triangle(int index, Point *p, Point *p1, Point *p2, Point *p3)
@@ -608,7 +615,6 @@ struct pfv3d
 		++p1->_n_tri; ++p2->_n_tri; ++p3->_n_tri;
 	}
 	/* === Add triangle === */
-
 
 	/* === Delete triangles */
 	private:
@@ -620,7 +626,7 @@ struct pfv3d
 			t = &*it->second;
 			for(int i = 0; i < 3; i++)
 				/* Delete vertex if it ceases to have associated triangles */
-				if(--t->_v[i]->_n_tri == 0 && t->_v[i]->_optimal == 0) {
+				if(--t->_v[i]->_n_tri == 0 && t->_v[i]->_input == 0) {
 					for(int j = 0; j < 3; ++j) _vertices[j].erase(t->_v[i]);
 					delete t->_v[i]; }
 			_triangles.erase((*it).second);
@@ -628,16 +634,6 @@ struct pfv3d
 		_p_to_ts[index].erase(point);
 	}
 	/* === Delete triangles */
-
-	template <typename T>
-	void print_tree(int spaces, typename T::traversor tr)
-	{
-		if(!tr.has_node()) return;
-		if(tr.has_right()) print_tree<T>(spaces+4, tr.right());
-		printf("%*s", spaces, "");
-		printf("%lf %lf %lf\t\t\t\t%d\n", (*tr)->_x[0], (*tr)->_x[1], (*tr)->_x[2], tr._node->_balance);
-		if(tr.has_left()) print_tree<T>(spaces+4, tr.left());
-	}
 };
 
 #endif
