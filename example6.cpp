@@ -33,7 +33,7 @@ int main(int argc, char const *argv[])
 			visualiser.add_point(points[rand()%n_points]);
 		for(j = 0; j < rand()%10; ++j)
 			visualiser.rem_point(points[rand()%n_points]);
-		visualiser.compute(1);
+		visualiser.compute(3);
 	}
 	visualiser.display();
 

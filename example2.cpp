@@ -25,7 +25,7 @@ int main(int argc, char const *argv[])
 	for(i = 0; i < n_points; i+=154) {
 		for(j = 0; j < 154; ++j)
 			visualiser.add_point(points[i+j]);
-		visualiser.compute(4);
+		visualiser.compute(2);
 	}
 	visualiser.display();
 
@@ -34,7 +34,7 @@ int main(int argc, char const *argv[])
 	for(i = 0; i < n_points; i+=154) {
 		for(j = 0; j < 154; ++j)
 			visualiser.rem_point(points[i+j]);
-		visualiser.compute(4);
+		visualiser.compute(2);
 	}
 	visualiser.display();
 

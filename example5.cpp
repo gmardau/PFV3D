@@ -26,7 +26,7 @@ int main(int argc, char const *argv[])
 		if(i % 1000 == 0)     visualiser.orientation(0, 0, 0);
 		else if(i % 500 == 0) visualiser.orientation(1, 1, 1);
 		visualiser.add_point(points[i]);
-		visualiser.compute(1);
+		visualiser.compute(3);
 	}
 	visualiser.display();
 
@@ -36,7 +36,7 @@ int main(int argc, char const *argv[])
 		if(i % 1000 == 0)     visualiser.orientation(0, 0, 0);
 		else if(i % 500 == 0) visualiser.orientation(1, 1, 1);
 		visualiser.rem_point(points[i]);
-		visualiser.compute(1);
+		visualiser.compute(3);
 	}
 	visualiser.display();
 

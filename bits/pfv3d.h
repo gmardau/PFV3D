@@ -355,12 +355,12 @@ struct pfv3d
 		int i;
 		/* If no action is needed */
 		if(_add[0].empty() && _rem[0].empty()) {
-			/*if(display_mode != 0) display_i(display_mode == 3 || display_mode == 4);*/ return; }
+			/*if(display_mode != 0) display_i(display_mode == 1 || display_mode == 2);*/ return; }
 
 		/* If all points from the previous computation are to be removed - clear frontier */
 		if(_points[0].size() == _add[0].size() + _rem[0].size() && _rem[0].size() > 0) clear_frontier();
 		/* In case all points have been removed - no action is needed */
-		if(_points[0].empty()) { /*if(display_mode != 0) display_i(display_mode == 3 || display_mode == 4);*/ return; }
+		if(_points[0].empty()) { /*if(display_mode != 0) display_i(display_mode == 1 || display_mode == 2);*/ return; }
 		_display_mode = display_mode;
 
 		/* Update limits and compute extremes (to be used by the sentinels) */
@@ -392,7 +392,7 @@ struct pfv3d
 		/* Update limits and extremes (non-optimal points may have had influence) */
 		for(i = 0; i < 3; ++i) update_limits(i);
 
-		if(display_mode != 0) display_i(display_mode == 3 || display_mode == 4);
+		if(display_mode != 0) display_i(display_mode == 1 || display_mode == 2);
 	}
 
 	private:
@@ -438,7 +438,7 @@ struct pfv3d
 			else {
 				(*it)->_optimal = facet(index, it, saved, add_in, rem_in, save_break);
 				if(_rm_non_optimal == 1 && (*it)->_optimal == 0) _non_optimal.insert(*it);
-				if(_display_mode == 2 || _display_mode == 4) display_i(_display_mode == 3 || _display_mode == 4);
+				if(_display_mode == 2 || _display_mode == 4) display_i(_display_mode == 1 || _display_mode == 2);
 			}
 
 			/* Update iterators and number of points to be added or to be removed */
