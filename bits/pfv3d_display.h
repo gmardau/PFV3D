@@ -185,7 +185,7 @@ class pfv3d_display
 
 	/* === Activate frontier display === */
 	public:
-	void display_frontier (bool mode, bool minmax[3], _List_T &triangles)
+	void display_frontier (bool mode, bool display_reset, bool minmax[3], _List_T &triangles)
 	{
 		if(triangles.empty()) {
 			_data[0] = 0;
@@ -224,7 +224,7 @@ class pfv3d_display
 		glBindBuffer(GL_ARRAY_BUFFER, _data[2]);
 		glBufferData(GL_ARRAY_BUFFER, size_vertices, vertices, GL_STATIC_DRAW);
 		// glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[3]);
-	 //    glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_indices, indices, GL_STATIC_DRAW);
+		// glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_indices, indices, GL_STATIC_DRAW);
 		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)0);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(1, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)(3*sizeof(double)));
@@ -247,7 +247,7 @@ class pfv3d_display
 		if(minmax[0] != minmax[1]) angle += M_PI/2.0;
 		_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_initial_quat;
 		
-		if(_mode == 0) reset();
+		if(_mode == 0 || display_reset == 1) reset();
 
 		_data[0] = triangles.size()*3;
 		blend_sort();
@@ -380,11 +380,10 @@ class pfv3d_display
 		glUniform3f(view_position_location, _cam_view[0], _cam_view[1], _cam_view[2]);
 		/* Object Colour */
 		int object_colour_location = glGetUniformLocation(_program, "object_colour");
-		// glUniform4f(object_colour_location, 1, 0.3, 0.1, 1);
-		// glUniform4f(object_colour_location, 0.1, 1, 0.2, 1);
-		// glUniform4f(object_colour_location, 0.2, 0.5, 1, 1);
-		glUniform4f(object_colour_location, 0.05, 0.1, 1, 0.8);
-		// glUniform4f(object_colour_location, 0.75, 0.75, 0.75, 1);
+		glUniform4f(object_colour_location, 1, 0.1, 0.05, 1);
+		// glUniform4f(object_colour_location, 0.05, 1, 0.1, 0.8);
+		// glUniform4f(object_colour_location, 0.05, 0.1, 1, 0.8);
+		// glUniform4f(object_colour_location, 0.6, 0.6, 0.6, 1);
 		// glUniform4f(object_colour_location, 1, 0.85, 0, 1);
 		/* Light Colour */
 		int light_colour_location = glGetUniformLocation(_program, "light_colour");

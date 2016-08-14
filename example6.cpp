@@ -7,7 +7,7 @@ int main(int argc, char const *argv[])
 {
 	int n_points, i, j;
 	double **points;
-	pfv3d visualiser(0, 0, 0);
+	pfv3d visualiser(0, 0, 0, 1);
 	FILE *f = fopen("Input/surf05.dat", "r");
 
 	fscanf(f, "%d", &n_points);

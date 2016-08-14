@@ -24,14 +24,14 @@ int main(int argc, char const *argv[])
 
 	for(i = 0; i < n_points; ++i) {
 		visualiser.add_point(points[i]);
-		visualiser.compute(1);
+		visualiser.compute(3);
 	}
 
 	std::random_shuffle(&points[0], &points[n_points]);
 
 	for(i = 0; i < n_points; ++i) {
 		visualiser.rem_point(points[i]);
-		visualiser.compute(1);
+		visualiser.compute(3);
 	}
 	visualiser.display();
 
