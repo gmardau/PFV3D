@@ -1,8 +1,8 @@
 CC = g++
--CC = -Wall -ansi -pedantic -lm -g -lpthread -std=c++11
+-CC = -Wall -ansi -pedantic -lm -g -lpthread -std=c++14
 -GL = -lGLEW -lGLU -lGL -lSDL2 -lX11
 
-default: all
+default: example1
 
 example1: example1.cpp
 	$(CC) $(-CC) $(-GL) example1.cpp -o example1

@@ -21,6 +21,7 @@ int main(int argc, char const *argv[])
 	visualiser.add_points(n_points, points);
 	visualiser.compute();
 	visualiser.display();
+	visualiser.export_file("output");
 
 	free(points);
 	

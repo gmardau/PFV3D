@@ -23,8 +23,8 @@ int main(int argc, char const *argv[])
 	std::random_shuffle(&points[0], &points[n_points]);
 
 	for(i = 0; i < 2000; ++i) {
-		     if(rand()%20 == 0) visualiser.minimise(rand()%3);
-		else if(rand()%20 == 0) visualiser.maximise(rand()%3);
+		     if(rand()%40 == 0) visualiser.minimise(rand()%3);
+		else if(rand()%40 == 0) visualiser.maximise(rand()%3);
 		for(j = 0; j < rand()%10; ++j)
 			visualiser.add_point(points[rand()%n_points]);
 		for(j = 0; j < rand()%10; ++j)

@@ -15,6 +15,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <X11/Xlib.h>
+#include <glm/gtx/closest_point.hpp>
 
 class pfv3d_display
 {
@@ -57,8 +58,8 @@ class pfv3d_display
 	/* Flags and objects data */
 	bool _mode = 0;
 	uint _data[4] = {0, 0, 0, 0};
-	int *_indices = nullptr;
-	glm::dvec3 *_centres = nullptr;
+	size_t _size_indices;  int     *_indices = nullptr;
+	size_t _size_vertices; double *_vertices = nullptr;
 	/* === Variables === */
 
 	/* === Constructor/Destructor === */
@@ -125,8 +126,7 @@ class pfv3d_display
 			uniform vec3 view_position;\
 			out vec4 colour;\
 			void main(){\
-				/*vec3 direction = normalize(vec3(obj_rotate * vec4(0.5, 2, 3.5, 1)));*/\
-				vec3 direction = normalize(vec3(obj_rotate * vec4(1, 2, 3, 1)));\
+				vec3 direction = normalize(vec3(obj_rotate * vec4(1.25, 2, 2.75, 1)));\
 				vec3 light_position = vec3(model * vec4(7.5, 7, 8, 1));\
 				vec3 light_direction = normalize(light_position-f_position);\
 				vec3 view_direction = normalize(view_position - f_position);\
@@ -138,7 +138,6 @@ class pfv3d_display
 				vec4 specular = 0.5f * spec * light_colour;\
 				\
 				colour = (ambient + diffuse) * object_colour;\
-				/*colour = vec4(vec3(ambient + diffuse), 1) * object_colour;*/\
 			}";
 		int fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
 		glShaderSource(fragment_shader, 1, (const GLchar**)&fragment_src, NULL);
@@ -200,34 +199,29 @@ class pfv3d_display
 		}
 		
 		/* Get data */
-		size_t size_vertices = triangles.size()*3*3*2*sizeof(double);
-		int i, j, v = 0, t = 0, c = 0;//, *indices = (int*) malloc(size_indices);
-		double limits[3][2] = {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}},
-		       normal[3], *vertices = (double*) malloc(size_vertices), centre[3];
-		_centres = (glm::dvec3 *) realloc(_centres, triangles.size()*sizeof(glm::dvec3));
+		_size_vertices = 2 * triangles.size() * 3 * 3 * sizeof(double);
+		_vertices = (double *) realloc(_vertices, _size_vertices);
+		_size_indices = triangles.size() * 3 * sizeof(int);
+		_indices = (int *) realloc(_indices, _size_indices);
+
+		int i, j, v = 0, t = 0;
+		double limits[3][2] = {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}}, normal[3];
 		for(_List_T::iterator it = triangles.begin(); it != triangles.end(); ++it) {
 			normal[0] = normal[1] = normal[2] = 0; normal[it->_normal] = 1;
-			centre[0] = centre[1] = centre[2] = 0;
 			for(i = 0; i < 3; ++i, ++t) {
 				for(j = 0; j < 3; ++j, ++v) {
-					centre[j] += vertices[v] = it->_v[i]->_x[j];
-					if(vertices[v] < limits[j][0]) limits[j][0] = vertices[v];
-					if(vertices[v] > limits[j][1]) limits[j][1] = vertices[v]; }
-				for(j = 0; j < 3; ++j, ++v) vertices[v] = normal[j];
-				// indices[t] = t;
+					_vertices[v] = it->_v[i]->_x[j];
+					if(_vertices[v] < limits[j][0]) limits[j][0] = _vertices[v];
+					if(_vertices[v] > limits[j][1]) limits[j][1] = _vertices[v]; }
+				for(j = 0; j < 3; ++j, ++v) _vertices[v] = normal[j];
 			}
-			_centres[c++] = glm::dvec3(centre[0]/3.0, centre[1]/3.0, centre[2]/3.0);
 		}
 
 		_mutex_data.lock();
-		size_t size_indices = triangles.size()*3*sizeof(int);
-		_indices = (int *) realloc(_indices, size_indices);
 
 		/* Bind data */
 		glBindBuffer(GL_ARRAY_BUFFER, _data[2]);
-		glBufferData(GL_ARRAY_BUFFER, size_vertices, vertices, GL_STATIC_DRAW);
-		// glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[3]);
-		// glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_indices, indices, GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, _size_vertices, _vertices, GL_STATIC_DRAW);
 		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)0);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(1, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)(3*sizeof(double)));
@@ -257,8 +251,6 @@ class pfv3d_display
 
 		_mutex_data.unlock();
 
-		/*free(indices);*/ free(vertices);
-
 		_mode = mode;
 		_mutex_cond.lock();
 		_cond_renderer.notify_one();
@@ -285,24 +277,44 @@ class pfv3d_display
 
 	/* === Sort triangles by distance to the camera === */
 	private:
+	double orientation(double v10, double v11, double v20, double v21, double v30, double v31)
+		{ return (v10-v30) * (v21-v31) - (v11-v31) * (v20-v30); }
 	void blend_sort ()
 	{
 		_mutex_data.lock();
-		int i, j;
-		double *distances = (double *) malloc(_data[0]/3*sizeof(double));
-		int *indices = (int *) malloc(_data[0]/3*sizeof(int));
-		_cam_view = glm::dvec3(_cam_translate * _cam_rotate * _cam_initial_view);
 
-		for(i = 0; i < (int)_data[0]/3; ++i) {
-			indices[i] = i;
-			distances[i] = glm::distance(glm::dvec3(_obj_rotate * glm::dvec4(_centres[i], 1)), _cam_view);
+		int i, j, n_tri = _data[0]/3, aux[3];
+		int *sort_indices = (int *) malloc(n_tri * sizeof(int));
+		double *dist = (double *) malloc(n_tri * sizeof(double));
+		bool ori[3];
+		glm::dvec3 proj, tri[3], inter[3];
+
+		glm::dvec3 cam_pos = glm::dvec3(_cam_translate * glm::inverse(_obj_rotate) * _cam_rotate * _cam_initial_view);
+
+		for(i = 0; i < n_tri; ++i) {
+			sort_indices[i] = i;
+			
+			for(j = 0; j < 3; ++j) tri[j] = glm::dvec3(_vertices[i*18+6*j], _vertices[i*18+6*j+1], _vertices[i*18+6*j+2]);
+			for(j = 0; j < 3; ++j) if(_vertices[i*18+3+j] == 1) {aux[2] = j; aux[0] = (j+1)%3; aux[1] = (j+2)%3; }
+			proj = glm::dvec3(cam_pos); proj[aux[2]] = tri[0][aux[2]];
+
+			for(j = 0; j < 3; ++j) ori[j] = orientation(tri[j][aux[0]], tri[j][aux[1]],
+				tri[(j+1)%3][aux[0]], tri[(j+1)%3][aux[1]], proj[aux[0]], proj[aux[1]]) < 0;
+			if(ori[0] == ori[1] && ori[0] == ori[2])
+				dist[i] = glm::distance(proj, cam_pos);
+			else {
+				for(j = 0; j < 3; ++j) inter[j] = glm::closestPointOnLine(proj, tri[j], tri[(j+1)%3]);
+				dist[i] = glm::min(glm::distance(cam_pos, inter[0]),
+					               glm::min(glm::distance(cam_pos, inter[1]), glm::distance(cam_pos, inter[2])));
+			}
 		}
-		std::sort(&indices[0], &indices[_data[0]/3],[&](size_t a, size_t b) { return distances[a] > distances[b]; } );
 
-		for(i = 0; i < (int)_data[0]/3; ++i) for(j = 0; j < 3; ++j) _indices[i*3+j] = indices[i]*3+j;
+		std::sort(&sort_indices[0], &sort_indices[n_tri],[&](size_t a, size_t b) { return dist[a] > dist[b]; } );
+		for(i = 0; i < n_tri; ++i) for(j = 0; j < 3; ++j) _indices[i*3+j] = sort_indices[i]*3+j;
 
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[3]);
 	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, _data[0]*sizeof(int), _indices, GL_STATIC_DRAW);
+
 		_mutex_data.unlock();
 	}
 	/* === Sort triangles by distance to the camera === */
@@ -329,10 +341,12 @@ class pfv3d_display
 					switch(event.type) {
 						case SDL_MOUSEMOTION: case SDL_MOUSEBUTTONUP: case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEWHEEL:
 							mouse(event); break;
-						case SDL_KEYUP: case SDL_KEYDOWN: keyboard(event); break;
+						case SDL_KEYUP: case SDL_KEYDOWN:
+							keyboard(event); break;
 						case SDL_WINDOWEVENT:
 							if(event.window.event == SDL_WINDOWEVENT_RESIZED) {
-								_window_w = event.window.data1; _window_h = event.window.data2; }
+								_window_w = event.window.data1; _window_h = event.window.data2;
+							}
 							break;
 						case SDL_QUIT: rendering = 0; SDL_HideWindow(_window); break;
 					}
@@ -380,12 +394,11 @@ class pfv3d_display
 		glUniform3f(view_position_location, _cam_view[0], _cam_view[1], _cam_view[2]);
 		/* Object Colour */
 		int object_colour_location = glGetUniformLocation(_program, "object_colour");
-		// glUniform4f(object_colour_location, 1, 0.1, 0.05, 0.75);
-		glUniform4f(object_colour_location, 0.05, 1, 0.1, 0.75);
-		// glUniform4f(object_colour_location, 0.05, 0.1, 1, 0.75);
-		// glUniform4f(object_colour_location, 1, 0.85, 0, 0.75);
-		// glUniform4f(object_colour_location, 0.75, 0.75, 0.75, 0.75);
-		// glUniform4f(object_colour_location, 0.8, 0.5, 0.2, 0.75);
+		glUniform4f(object_colour_location, 1, 0.1, 0.05, 1);
+		// glUniform4f(object_colour_location, 0.05, 1, 0.1, 0.8);
+		// glUniform4f(object_colour_location, 0.05, 0.1, 1, 0.8);
+		// glUniform4f(object_colour_location, 0.6, 0.6, 0.6, 1);
+		// glUniform4f(object_colour_location, 1, 0.85, 0, 1);
 		/* Light Colour */
 		int light_colour_location = glGetUniformLocation(_program, "light_colour");
 		glUniform4f(light_colour_location, 1, 1, 1, 1);

@@ -10,7 +10,7 @@
 /* === Point structure === */
 struct Point {
 	bool _input, _optimal = 1;
-	int _state = 1, _n_tri = 0;
+	int _state = 1, _n_tri = 0, _aid = 0;
 	double _x[3];
 	Point (double x1, double x2, double x3, bool input = 0) : _input(input), _x{x1, x2, x3} {}
 	Point (double *x, bool input = 0) : _input(input), _x{x[0], x[1], x[2]} {} };
@@ -62,7 +62,7 @@ struct pfv3d
 	typedef tree<tree_avl, Point *, projection_compare> _Tree_Proj;
 	typedef std::unordered_set<Point *> _USet_P;
 	typedef std::list<Triangle> _List_T;
-	typedef std::unordered_multimap<Point *, _List_T::iterator> _UMap_PTs;	
+	typedef std::unordered_multimap<Point *, _List_T::iterator> _UMMap_PTs;	
 
 
 	/* === Variables === */
@@ -82,7 +82,7 @@ struct pfv3d
 
 	_USet_P _non_optimal;
 	_List_T _triangles;
-	_UMap_PTs _p_to_ts[3];
+	_UMMap_PTs _p_to_ts[3];
 
 	pfv3d_display _display;
 	/* === Variables === */
@@ -148,6 +148,28 @@ struct pfv3d
 		clear_frontier();
 	}
 	/* === Define the optimisation orientation === */
+
+
+	/* === Export data to file === */
+	public:
+	void export_file(const char *file_name)
+	{
+		FILE *f = fopen(file_name, "w");
+		if(f == nullptr) return;
+		fprintf(f, "%lu %lu\n", _points[0].size() + _vertices[0].size(), _triangles.size());
+		int i = 0;
+		_Tree_P::iterator it_v;
+		_List_T::iterator it_t;
+		for(it_v = _points[0].begin(); !it_v.is_sentinel(); ++it_v) {
+			fprintf(f, "%.15lf %.15lf %.15lf\n", (*it_v)->_x[0], (*it_v)->_x[1], (*it_v)->_x[2]); (*it_v)->_aid = i++; }
+		for(it_v = _vertices[0].begin(); !it_v.is_sentinel(); ++it_v) {
+			fprintf(f, "%.15lf %.15lf %.15lf\n", (*it_v)->_x[0], (*it_v)->_x[1], (*it_v)->_x[2]); (*it_v)->_aid = i++; }
+		for(it_t = _triangles.begin(); it_t != _triangles.end(); ++it_t) {
+			fprintf(f, "%d %d %d\n", it_t->_v[0]->_aid, it_t->_v[1]->_aid, it_t->_v[2]->_aid);
+		}
+		fclose(f);
+	}
+	/* === Export data to file === */
 
 
 	/* === Clear all data === */
@@ -355,12 +377,13 @@ struct pfv3d
 		int i;
 		/* If no action is needed */
 		if(_add[0].empty() && _rem[0].empty()) {
-			/*if(display_mode != 0) display_i(display_mode == 1 || display_mode == 2);*/ return; }
+			if(display_mode != 0) display_i(display_mode == 1 || display_mode == 2);
+			return; }
 
 		/* If all points from the previous computation are to be removed - clear frontier */
 		if(_points[0].size() == _add[0].size() + _rem[0].size() && _rem[0].size() > 0) clear_frontier();
 		/* In case all points have been removed - no action is needed */
-		if(_points[0].empty()) { /*if(display_mode != 0) display_i(display_mode == 1 || display_mode == 2);*/ return; }
+		if(_points[0].empty()) { if(display_mode != 0) display_i(display_mode == 1 || display_mode == 2); return; }
 		_display_mode = display_mode;
 
 		/* Update limits and compute extremes (to be used by the sentinels) */
