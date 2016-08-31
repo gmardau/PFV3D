@@ -9,7 +9,7 @@ int main(int argc, char const *argv[])
 	double *points;
 	pfv3d visualiser;
 	FILE *f = fopen("Input/surf05.dat", "r");
-
+	
 	fscanf(f, "%d", &n_points);
 	points = (double *) malloc(n_points * sizeof(double) * 3);
 
