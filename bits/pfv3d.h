@@ -138,7 +138,7 @@ struct pfv3d
 		for(tree<tree_avl, Point>::iterator it = asdf4.begin(); !it.is_sentinel(); ++it)
 			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
 		printf("\n\n");
-
+		
 		asdf3.merge(asdf4);
 
 		printf("\n\n1\n");
