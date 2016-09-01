@@ -4,7 +4,6 @@
 #include <limits>
 #include <functional>
 #include <list>
-#include <set>
 #include <unordered_set>
 #include <unordered_map>
 
@@ -14,9 +13,7 @@ struct Point {
 	int _state = 1, _n_tri = 0, _aid = 0;
 	double _x[3];
 	Point (double x1, double x2, double x3, bool input = 0) : _input(input), _x{x1, x2, x3} {}
-	Point (double *x, bool input = 0) : _input(input), _x{x[0], x[1], x[2]} {}
-	bool operator<(const Point &p) const {return this->_x[0] < p._x[0];}
-	bool operator>(const Point &p) const {return this->_x[0] > p._x[0];}};
+	Point (double *x, bool input = 0) : _input(input), _x{x[0], x[1], x[2]} {}};
 /* === Point structure === */
 /* === Triangle structure === */
 struct Triangle {
@@ -100,104 +97,6 @@ struct pfv3d
 			if(_minmax[i] == 0) { _extremes[i] = DMAX; _oo[i] = std::less   <double>(); }
 			else                { _extremes[i] = DMIN; _oo[i] = std::greater<double>(); }
 		}
-		tree<tree_avl, Point> asdf;
-		tree<tree_avl, Point>::iterator it = asdf.insert(Point(1, 2, 3)).first;
-		asdf.emplace(3, 2, 1);
-		asdf.emplace_hint(it, 2, 2, 1);
-		asdf.emplace_hint(it, 1, 2, 1);
-		asdf.insert_hint(it, Point(4, 2, 1));
-
-		tree<tree_avl, Point, std::greater<Point>> asdf2;
-		asdf2.insert(asdf.begin(), asdf.end());
-		asdf2.insert(asdf.begin());
-		asdf2.erase(asdf2.begin(), asdf2.end().prev());
-		asdf2.emplace(2,4,2);
-		std::initializer_list<Point> digits {Point(7, 8, 9), Point(8, 10, 9)};
-		asdf2.insert(digits);
-		asdf2.erase(asdf2.begin());
-		// asdf.swap(asdf2);
-		asdf.emplace(2,3,4);
-		asdf2.emplace(0,3,3);
-
-		tree<tree_bs, Point> asdf3;
-		asdf3.emplace(10, 11, 12);
-
-		tree<tree_avl, Point> asdf4 = tree<tree_avl, Point>(std::allocator<Point>());
-		asdf4.emplace(6,7,8);
-
-		printf("\n\n1\n");
-		for(tree<tree_avl, Point>::iterator it = asdf.begin(); !it.is_sentinel(); ++it)
-			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		printf("\n2\n");
-		for(tree<tree_avl, Point, std::greater<Point>>::iterator it = asdf2.begin(); !it.is_sentinel(); ++it)
-			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		printf("\n3\n");
-		for(tree<tree_bs, Point>::iterator it = asdf3.begin(); !it.is_sentinel(); ++it)
-			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		printf("\n4\n");
-		for(tree<tree_avl, Point>::iterator it = asdf4.begin(); !it.is_sentinel(); ++it)
-			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		printf("\n\n");
-		
-		asdf3.merge(asdf4);
-
-		printf("\n\n1\n");
-		for(tree<tree_avl, Point>::iterator it = asdf.begin(); !it.is_sentinel(); ++it)
-			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		printf("\n2\n");
-		for(tree<tree_avl, Point, std::greater<Point>>::iterator it = asdf2.begin(); !it.is_sentinel(); ++it)
-			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		printf("\n3\n");
-		for(tree<tree_bs, Point>::iterator it = asdf3.begin(); !it.is_sentinel(); ++it)
-			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		printf("\n4\n");
-		for(tree<tree_avl, Point>::iterator it = asdf4.begin(); !it.is_sentinel(); ++it)
-			printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		printf("\n\n");
-
-		// asdf.merge(asdf2);
-
-		// printf("\n\n1\n");
-		// for(tree<tree_avl, Point>::iterator it = asdf.begin(); !it.is_sentinel(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		// printf("\n2\n");
-		// for(tree<tree_avl, Point, std::greater<Point>>::iterator it = asdf2.begin(); !it.is_sentinel(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		// printf("\n3\n");
-		// for(tree<tree_bs, Point>::iterator it = asdf3.begin(); !it.is_sentinel(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		// printf("\n4\n");
-		// for(tree<tree_avl, Point>::iterator it = asdf4.begin(); !it.is_sentinel(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		// printf("\n\n");
-
-		// asdf.swap(asdf2);
-		// for(tree<tree_avl, Point>::iterator it = asdf.begin(); !it.is_sentinel(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		// printf("\n");
-		// for(tree<tree_avl, Point>::iterator it = asdf2.begin(); !it.is_sentinel(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		// printf("\n");
-
-		// asdf = std::move(asdf2);
-		// printf("%lu\n", asdf.size());
-		// for(tree<tree_avl, Point>::iterator it = asdf.begin(); !it.is_sentinel(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		// for(tree<tree_avl, Point>::iterator it = asdf2.begin(); !it.is_sentinel(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-
-		// printf("\n\n");
-		// std::set<Point> qwer;
-		// std::set<Point> qwer2;
-		// qwer.emplace(1, 2, 3);
-		// qwer2.emplace(3, 2, 2);
-		// for(std::set<Point>::iterator it = qwer.begin(); it != qwer.end(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		// qwer = std::move(qwer2);
-		// for(std::set<Point>::iterator it = qwer.begin(); it != qwer.end(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
-		// for(std::set<Point>::iterator it = qwer2.begin(); it != qwer2.end(); ++it)
-		// 	printf("%lf %lf %lf\n", it->_x[0], it->_x[1], it->_x[2]);
 	}
 	~pfv3d ()
 	{
@@ -368,11 +267,14 @@ struct pfv3d
 	void rem_points (int n, double points[][3]) { rem_points(n, &points[0][0]); }
 	void rem_points (int n, double *points)
 	{
+		_Tree_P::iterator it;
 		Point *tmp, *p;
 		for(int i = 0; i < n*3; i += 3) {
-			p = *_points[0].find((tmp = new Point(&points[i]))); delete tmp;
+			it = _points[0].find((tmp = new Point(&points[i]))); delete tmp;
 			/* If there is no point with the specified coordinates */
-			if(p == *_points[0].end()) continue;
+			if(it.is_sentinel()) continue;
+			/* If there is */
+			p = *it;
 			/* If it was yet to be added, remove it */
 			if(p->_state == 1) {
 				for(int j = 0; j < 3; ++j) { _add[j].erase(p); _points[j].erase(p); }
