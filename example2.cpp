@@ -27,7 +27,7 @@ int main(int argc, char const *argv[])
 			visualiser.add_point(points[i+j]);
 		visualiser.compute(2);
 	}
-	visualiser.display();
+	// visualiser.display();
 
 	std::random_shuffle(&points[0], &points[n_points]);
 
@@ -36,7 +36,7 @@ int main(int argc, char const *argv[])
 			visualiser.rem_point(points[i+j]);
 		visualiser.compute(2);
 	}
-	visualiser.display();
+	// visualiser.display();
 
 	for(i = 0; i < n_points; ++i)
 		free(points[i]);

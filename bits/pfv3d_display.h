@@ -22,6 +22,10 @@ class pfv3d_display
 	#define DMIN std::numeric_limits<double>::lowest()
 	typedef std::list<Triangle> _List_T;
 
+	public:
+	_List_T *_triangles;
+
+	private:
 	/* === Variables === */
 	/* Window */
 	SDL_Window *_window;
@@ -185,11 +189,32 @@ class pfv3d_display
 	}
 	/* === Constructor/Destructor === */
 
+	private:
+	void process_triangles (double limits[3][2], double *vertices, int d, size_t begin, size_t len)
+	{
+		int i, j, v = begin*18, c = begin-1;
+		double centre[3], normal[3] = {0, 0, 0}; normal[d] = 1;
+		for(_List_T::iterator it = _triangles[d].begin(); it != _triangles[d].end(); ++it) {
+			centre[0] = centre[1] = centre[2] = 0;
+			for(i = 0; i < 3; ++i) {
+				for(j = 0; j < 3; ++j, ++v) {
+					centre[j] += vertices[v] = it->_v[i]->_x[j];
+					if(vertices[v] < limits[j][0]) limits[j][0] = vertices[v];
+					if(vertices[v] > limits[j][1]) limits[j][1] = vertices[v];
+				}
+				for(j = 0; j < 3; ++j, ++v) vertices[v] = normal[j];
+			}
+			_centres[++c] = glm::dvec3(centre[0]/3.0, centre[1]/3.0, centre[2]/3.0);
+		}
+	}
+
 	/* === Activate frontier display === */
 	public:
-	void display_frontier (bool mode, bool display_reset, bool minmax[3], _List_T &triangles)
+	void display_frontier (bool mode, bool display_reset, bool minmax[3])
 	{
-		if(triangles.empty()) {
+		size_t size_t0 = _triangles[0].size(), size_t1 = _triangles[1].size(), size_t2 = _triangles[2].size();
+
+		if(size_t0+size_t1+size_t2 == 0) {
 			_data[0] = 0;
 			_mutex_cond.lock();
 			_cond_renderer.notify_one();
@@ -200,32 +225,32 @@ class pfv3d_display
 		}
 		
 		/* Get data */
-		size_t size_vertices = triangles.size()*3*3*2*sizeof(double);
-		int i, j, v = 0, t = 0, c = 0;//, *indices = (int*) malloc(size_indices);
-		double limits[3][2] = {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}},
-		       normal[3], *vertices = (double*) malloc(size_vertices), centre[3];
-		_centres = (glm::dvec3 *) realloc(_centres, triangles.size()*sizeof(glm::dvec3));
-		for(_List_T::iterator it = triangles.begin(); it != triangles.end(); ++it) {
-			normal[0] = normal[1] = normal[2] = 0; normal[it->_normal] = 1;
-			centre[0] = centre[1] = centre[2] = 0;
-			for(i = 0; i < 3; ++i, ++t) {
-				for(j = 0; j < 3; ++j, ++v) {
-					centre[j] += vertices[v] = it->_v[i]->_x[j];
-					if(vertices[v] < limits[j][0]) limits[j][0] = vertices[v];
-					if(vertices[v] > limits[j][1]) limits[j][1] = vertices[v]; }
-				for(j = 0; j < 3; ++j, ++v) vertices[v] = normal[j];
-				// indices[t] = t;
-			}
-			_centres[c++] = glm::dvec3(centre[0]/3.0, centre[1]/3.0, centre[2]/3.0);
+		size_t size_v = (size_t0+size_t1+size_t2)*3*3*2*sizeof(double);
+		int i;
+		double tmp_limits[3][3][2] = {{{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}},
+		                              {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}},
+		                              {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}}};
+		double *vertices = (double*) malloc(size_v);
+		_centres = (glm::dvec3 *) realloc(_centres, (size_t0+size_t1+size_t2)*sizeof(glm::dvec3));
+		std::thread workers[3] = {
+			std::thread(&pfv3d_display::process_triangles, this, tmp_limits[0], vertices, 0, 0,               size_t0),
+			std::thread(&pfv3d_display::process_triangles, this, tmp_limits[1], vertices, 1, size_t0,         size_t1),
+			std::thread(&pfv3d_display::process_triangles, this, tmp_limits[2], vertices, 2, size_t0+size_t1, size_t2)	
+		};
+		workers[0].join(); workers[1].join(); workers[2].join();
+		double limits[3][2];
+		for(i = 0; i < 3; ++i) {
+			limits[i][0] = fmin(tmp_limits[0][i][0], fmin(tmp_limits[1][i][0], tmp_limits[2][i][0]));
+			limits[i][1] = fmax(tmp_limits[0][i][1], fmax(tmp_limits[1][i][1], tmp_limits[2][i][1]));
 		}
 
 		_mutex_data.lock();
-		size_t size_indices = triangles.size()*3*sizeof(int);
+		size_t size_indices = (size_t0+size_t1+size_t2)*3*sizeof(int);
 		_indices = (int *) realloc(_indices, size_indices);
 
 		/* Bind data */
 		glBindBuffer(GL_ARRAY_BUFFER, _data[2]);
-		glBufferData(GL_ARRAY_BUFFER, size_vertices, vertices, GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, size_v, vertices, GL_STATIC_DRAW);
 		// glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _data[3]);
 		// glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_indices, indices, GL_STATIC_DRAW);
 		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)0);
@@ -252,7 +277,7 @@ class pfv3d_display
 		
 		if(_mode == 0 || display_reset == 1) reset();
 
-		_data[0] = triangles.size()*3;
+		_data[0] = (size_t0+size_t1+size_t2)*3;
 		blend_sort();
 
 		_mutex_data.unlock();
