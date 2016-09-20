@@ -2,24 +2,14 @@ CC = g++
 -CC = -Wall -ansi -pedantic -lm -g -lpthread -std=c++14
 -GL = -lGLEW -lGLU -lGL -lSDL2 -lX11
 
-default: example3
+default: example
 
-example1: example1.cpp
-	$(CC) $(-CC) $(-GL) example1.cpp -o example1
-example2: example2.cpp
-	$(CC) $(-CC) $(-GL) example2.cpp -o example2
-example3: example3.cpp
-	$(CC) $(-CC) $(-GL) example3.cpp -o example3
-example4: example4.cpp
-	$(CC) $(-CC) $(-GL) example4.cpp -o example4
-example5: example5.cpp
-	$(CC) $(-CC) $(-GL) example5.cpp -o example5
-example6: example6.cpp
-	$(CC) $(-CC) $(-GL) example6.cpp -o example6
+example: example.cpp
+	$(CC) $(-CC) $(-GL) example.cpp -o example
 
-all: example1 example2 example3 example4 example5 example6
+all: example
 
 clean:
-	rm -f example1 example2 example3 example4 example5 example6
+	rm -f example
 
-.PHONY: example1 example2 example3 example4 example5 example6
+.PHONY: example
