@@ -3,7 +3,6 @@ class pfv3d_display
 	/* === Variables === */
 	/* PFV3D Data */
 	bool *__oo;
-	int *__count_new_triangles;
 	_Tree_P *__vertices;
 	_List_T *__triangles;
 
@@ -43,15 +42,15 @@ class pfv3d_display
 	bool _mode = 0;
 	uint _vao, _vbo_vertices, _vbo_indices;
 	int *_indices = nullptr; double *_vertices = nullptr;
-	size_t _size_vertices = 0, _size_triangles = 0, _size_allocated = 0, _size_used = 0;
+	size_t _size_vertices = 0, _size_triangles = 0, _size_allocated = 0;
 	double _allocation_factor = 1.5, _limits[3][2];
 	/* === Variables === */
 
 
 	/* === Constructor/Destructor === */
 	public:
-	pfv3d_display (bool *oo, int *count_new_triangles, _Tree_P *vertices, _List_T *triangles)
-	    : __oo(oo), __count_new_triangles(count_new_triangles), __vertices(vertices), __triangles(triangles)
+	pfv3d_display (bool *oo, _Tree_P *vertices, _List_T *triangles)
+	    : __oo(oo), __vertices(vertices), __triangles(triangles)
 	{
 		/* Window */
 		Display *display = XOpenDisplay(NULL);
@@ -181,28 +180,22 @@ class pfv3d_display
 
 	private:
 	bool
-	_pre_process (size_t &size_new_triangles, bool &allocation)
+	_pre_process ()
 	{
-		/* If there is not enough allocated space - organize allocation */
-		if(_size_used + size_new_triangles > _size_allocated) {
-			/* If number of elements is low enough - no need to allocate more space, just re-place all triangles */
-			if(_size_triangles < _size_allocated/_allocation_factor) return 0;
-			/* Otherwise - allocate more space and process only new triangles and modified vertices */
-			else {
-				_size_allocated = (_size_used + size_new_triangles) * _allocation_factor;
-				_vertices = (double *) realloc(_vertices, _size_allocated * 18 * sizeof(double));
-				_indices  =    (int *) realloc(_indices,  _size_allocated *  3 * sizeof(int));
-				allocation = 1;
-				return _size_used != 0;
-			}
+		/* If there is not enough allocated space - reallocate */
+		if(_size_triangles > _size_allocated) {
+			_size_allocated = _size_triangles * _allocation_factor;
+			_vertices = (double *) realloc(_vertices, _size_allocated * 18 * sizeof(double));
+			_indices  =    (int *) realloc(_indices,  _size_allocated *  3 * sizeof(int));
+			return 1;
 		}
-		return 1;
+		return 0;
 	}
 
 	private:
 	template <typename It>
 	void
-	_process_all (int x, It it, size_t begin, size_t end)
+	_process (int x, It it, size_t begin, size_t end)
 	{
 		int j, k;
 		size_t vi = begin * 18, ii = begin * 3;
@@ -212,41 +205,8 @@ class pfv3d_display
 			for(j = 0; j < 3; ++j) {
 				for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = it->_v[j]->_x[k];
 				for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = normal[k];
-				it->_v[j]->_modified = 0;
 			}
 			for(j = 0; j < 3; ++j, ++ii) _indices[ii] = ii;
-		}
-	}
-
-	private:
-	template <typename It>
-	void
-	_process_new (int x, It it, size_t begin, size_t end, size_t ti, short int increment)
-	{
-		int j, k;
-		size_t vi, ii = begin * 3;
-		double normal[3] = {0, 0, 0}; normal[x] = 1;
-		for(size_t i = begin; i < end; ++i, ++it) {
-			if(it->_did == -1) {
-				it->_did = ti;
-				vi = ti * 18;
-				ti += increment;
-				for(j = 0; j < 3; ++j) {
-					for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = it->_v[j]->_x[k];
-					for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = normal[k];
-					it->_v[j]->_modified = 0;
-				}
-			}
-			else {
-				for(j = 0; j < 3; ++j) {
-					if(it->_v[j]->_modified == 0) continue;
-					vi = it->_did * 18 + j * 6;
-					for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = it->_v[j]->_x[k];
-					for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = normal[k];
-					it->_v[j]->_modified = 0;
-				}
-			}
-			for(j = 0; j < 3; ++j, ++ii) _indices[ii] = it->_did*3 + j;
 		}
 	}
 
@@ -255,43 +215,25 @@ class pfv3d_display
 	void
 	display_frontier (bool mode, bool reset)
 	{
-		size_t count_triangles[3] = {__triangles[0].size(), __triangles[1].size(), __triangles[2].size()};
-		size_t size_new_triangles = __count_new_triangles[0] + __count_new_triangles[1] + __count_new_triangles[2];		
-		
+		size_t count_triangles[3] = {__triangles[0].size(), __triangles[1].size(), __triangles[2].size()};	
 		_size_triangles = count_triangles[0] + count_triangles[1] + count_triangles[2];
 		
 		/* If there is no triangles to display - notify the renderer and exit */
 		if(_size_triangles == 0) { _size_vertices = 0; _notify_renderer(mode); _mode = 0; return; }
 
 		int i, j;
-		size_t begin = 0, end = 0, index = _size_used;
+		size_t begin = 0, end = 0;
 		std::thread threads[3][2];
 
-		bool allocation = 0;
-		/* (Re)Process/(Re-)place all triangles - write data contiguously */
-		if(!_pre_process(size_new_triangles, allocation)) {
-			for(i = 0; i < 3; ++i) {
-				begin = end; end += (size_t)(count_triangles[i]/2.0+0.5);
-				threads[i][0] = std::thread(&pfv3d_display::_process_all<_List_T::iterator>,
-					this, i, __triangles[i]. begin(), begin, end);
-				begin = end; end += (size_t)(count_triangles[i]/2.0);
-				threads[i][1] = std::thread(&pfv3d_display::_process_all<_List_T::reverse_iterator>,
-					this, i, __triangles[i].rbegin(), begin, end);
-			}
-			_size_used = _size_triangles;
-		}
-		/* Process new triangles and modified vertices */
-		else {
-			for(i = 0; i < 3; ++i) {
-				begin = end; end += (size_t)(count_triangles[i]/2.0+0.5);
-				threads[i][0] = std::thread(&pfv3d_display::_process_new<_List_T::iterator>,
-					this, i, __triangles[i]. begin(), begin, end, index, 1);
-				begin = end; end += (size_t)(count_triangles[i]/2.0);
-				index += __count_new_triangles[i];
-				threads[i][1] = std::thread(&pfv3d_display::_process_new<_List_T::reverse_iterator>,
-					this, i, __triangles[i].rbegin(), begin, end, index-1, -1);
-			}
-			_size_used += size_new_triangles;
+		/* Process triangles */
+		bool allocation = _pre_process();
+		for(i = 0; i < 3; ++i) {
+			begin = end; end += (size_t)(count_triangles[i]/2.0+0.5);
+			threads[i][0] = std::thread(&pfv3d_display::_process<_List_T::iterator>,
+				this, i, __triangles[i]. begin(), begin, end);
+			begin = end; end += (size_t)(count_triangles[i]/2.0);
+			threads[i][1] = std::thread(&pfv3d_display::_process<_List_T::reverse_iterator>,
+				this, i, __triangles[i].rbegin(), begin, end);
 		}
 		for(i = 0; i < 3; ++i) for(j = 0; j < 2; ++j) threads[i][j].join();
 
@@ -311,7 +253,7 @@ class pfv3d_display
 		/* Bind data */
 		glBindBuffer(GL_ARRAY_BUFFER, _vbo_vertices);
 		if(allocation) glBufferData(GL_ARRAY_BUFFER, _size_allocated * 18 * sizeof(double), NULL, GL_DYNAMIC_DRAW);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, _size_used * 18 * sizeof(double), _vertices);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, _size_triangles * 18 * sizeof(double), _vertices);
 		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)0);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(1, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)(3*sizeof(double)));

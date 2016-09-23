@@ -25,7 +25,7 @@
 
 /* === Point structure === */
 struct Point {
-	const bool _input; bool _optimal = 1, _modified = 0;
+	const bool _input; bool _optimal = 1;
 	int _state = 1;
 	size_t _n_tri = 0, _aid = 0;
 	double _x[3];
@@ -79,7 +79,7 @@ struct pfv3d
 
 	/* === Variables === */
 	bool _oo[3], _rem_non_optimal;
-	int _display_mode, _count_new_triangles[3] = {0, 0, 0};
+	int _display_mode;
 	double _limits[3][2] = {{DMIN, DMAX}, {DMIN, DMAX}, {DMIN, DMAX}}, _extremes[3];
 	_Bin_Func _of[3];
 
@@ -100,7 +100,7 @@ struct pfv3d
 	std::mutex _mutex_vertices, _mutex_all_vertices, _mutex_triangles, _mutex_display;
 
 	#include "pfv3d_display.h"
-	pfv3d_display *_pfv3d_display = new pfv3d_display(_oo, _count_new_triangles, _vertices, _triangles);
+	pfv3d_display *_pfv3d_display = new pfv3d_display(_oo, _vertices, _triangles);
 	/* === Variables === */
 
 
@@ -221,7 +221,7 @@ struct pfv3d
 		_all_vertices.clear();
 		for(i = 0; i < 3; ++i) _vertices[i].clear();
 		/* Delete all triangles */
-		for(i = 0; i < 3; ++i) { _triangles[i].clear(); _p_to_ts[i].clear(); _count_new_triangles[i] = 0; }
+		for(i = 0; i < 3; ++i) { _triangles[i].clear(); _p_to_ts[i].clear(); }
 	}
 	/* === Clear frontier === */
 
@@ -285,7 +285,6 @@ struct pfv3d
 			_points[i].clear(); _add[i].clear(); _rem[i].clear(); _vertices[i].clear();
 			_triangles[i].clear(); _p_to_ts[i].clear();
 			_limits[i][0] = DMIN; _limits[i][1] = DMAX;
-			_count_new_triangles[i] = 0;
 		}
 	}
 	/* === Clear all data === */
@@ -399,12 +398,12 @@ struct pfv3d
 		/* If extremes have extended - update coordinates and reinsert vertices in the hashtable */
 		if(_of[x](_extremes[x], extreme))
 			for(; !it.is_sentinel() && (*it)->_x[x] == _extremes[x]; ++it, p = *it) {
-				_all_vertices.erase(p); p->_x[x] = extreme; p->_modified = 1; _all_vertices.insert(p); }
+				_all_vertices.erase(p); p->_x[x] = extreme; _all_vertices.insert(p); }
 		/* If shrunk - update coordinates and reinsert vertices in the hastable and trees */
 		else
 			for(; !it.is_sentinel() && (*it)->_x[x] == _extremes[x]; it = _vertices[x].rbegin(), p = *it) {
 				for(i = 0; i < 3; ++i) _vertices[i].erase(p);
-				_all_vertices.erase(p); p->_x[x] = extreme; p->_modified = 1; _all_vertices.insert(p);
+				_all_vertices.erase(p); p->_x[x] = extreme; _all_vertices.insert(p);
 				for(i = 0; i < 3; ++i) _vertices[i].insert(p);
 			}
 
@@ -439,7 +438,7 @@ struct pfv3d
 
 		/* Translate vertices to the new extremes (and reinsert them in the hashtable) */
 		for(Point *p = *it; !it.is_sentinel() && (*it)->_x[x] == _extremes[x]; ++it, p = *it) {
-			_all_vertices.erase(p); p->_x[x] = extreme; p->_modified = 1; _all_vertices.insert(p); }
+			_all_vertices.erase(p); p->_x[x] = extreme; _all_vertices.insert(p); }
 
 		/* Update limits and extreme */
 		_limits[x][0] = limits[0]; _limits[x][1] = limits[1]; _extremes[x] = extreme;
@@ -751,7 +750,6 @@ struct pfv3d
 		_mutex_vertices.lock();
 		_p_to_ts[x].insert({p, _triangles[x].insert(_triangles[x].end(), Triangle(p1, p2, p3))});
 		++p1->_n_tri; ++p2->_n_tri; ++p3->_n_tri;
-		++_count_new_triangles[x];
 		_mutex_vertices.unlock();
 	}
 	/* === Add triangle === */
@@ -776,7 +774,6 @@ struct pfv3d
 					for(int j = 0; j < 3; ++j) _vertices[j].erase(t->_v[i]);
 					_mutex_all_vertices.lock(); _all_vertices.erase(point); _mutex_all_vertices.unlock(); delete t->_v[i]; }
 			_mutex_vertices.unlock();
-			if(t->_did == -1) --_count_new_triangles[x];
 			_triangles[x].erase((*it).second);
 		}
 		_p_to_ts[x].erase(point);
