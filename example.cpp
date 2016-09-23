@@ -41,7 +41,7 @@ void example2 ()
 {
 	int n_points, i, j;
 	double **points;
-	pfv3d visualiser(0, 0, 0, 4);
+	pfv3d visualiser(0, 0, 0, 2);
 	FILE *f = fopen("Input/surf06.dat", "r");
 
 	fscanf(f, "%d", &n_points);
@@ -61,7 +61,7 @@ void example2 ()
 			visualiser.add_point(points[i+j]);
 		visualiser.compute();
 	}
-	visualiser.display();
+	// visualiser.display();
 
 	std::random_shuffle(&points[0], &points[n_points]);
 
@@ -70,7 +70,7 @@ void example2 ()
 			visualiser.rem_point(points[i+j]);
 		visualiser.compute();
 	}
-	visualiser.display();
+	// visualiser.display();
 
 	for(i = 0; i < n_points; ++i)
 		free(points[i]);
@@ -81,7 +81,7 @@ void example3 ()
 {
 	int n_points, i;
 	double **points;
-	pfv3d visualiser(1, 1, 1);
+	pfv3d visualiser(1, 1, 1, 1);
 	FILE *f = fopen("Input/surf05-500.dat", "r");
 
 	fscanf(f, "%d", &n_points);

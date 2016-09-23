@@ -2,19 +2,32 @@
 #define _PFV3D_H_
 
 #include <signal.h>
+#include <math.h>
 #include <limits>
 #include <functional>
+#include <algorithm>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include <list>
 #include <set>
 #include <unordered_set>
 #include <unordered_map>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <GL/glew.h>
+#include <GL/glu.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
+#include <X11/Xlib.h>
+
 /* === Point structure === */
 struct Point {
-	const bool _input; bool _optimal = 1;
-	int _state = 1, _n_tri = 0, _aid = 0;
+	const bool _input; bool _optimal = 1, _modified = 0;
+	int _state = 1;
+	size_t _n_tri = 0, _aid = 0;
 	double _x[3];
 	Point (double x1, double x2, double x3, bool input = 0) : _input(input), _x{x1, x2, x3} {}
 	Point (double *x, bool input = 0) : _input(input), _x{x[0], x[1], x[2]} {}
@@ -22,14 +35,13 @@ struct Point {
 /* === Point structure === */
 /* === Triangle structure === */
 struct Triangle {
+	long _did = -1;
 	Point *const _v[3];
 	Triangle (Point *v1, Point *v2, Point *v3) : _v{v1, v2, v3} {}
 };
 /* === Triangle structure === */
 
-#include "pfv3d_display.h"
-
-class pfv3d
+struct pfv3d
 {
 	typedef std::function<bool (double, double)> _Bin_Func;
 
@@ -67,7 +79,7 @@ class pfv3d
 
 	/* === Variables === */
 	bool _oo[3], _rem_non_optimal;
-	int _display_mode, _po[3][3] = {{1, 2, 0}, {2, 0, 1}, {0, 1, 2}};
+	int _display_mode, _count_new_triangles[3] = {0, 0, 0};
 	double _limits[3][2] = {{DMIN, DMAX}, {DMIN, DMAX}, {DMIN, DMAX}}, _extremes[3];
 	_Bin_Func _of[3];
 
@@ -87,7 +99,8 @@ class pfv3d
 	std::thread _threads[3];
 	std::mutex _mutex_vertices, _mutex_all_vertices, _mutex_triangles, _mutex_display;
 
-	pfv3d_display *_pfv3d_display = new pfv3d_display(_oo, _triangles);
+	#include "pfv3d_display.h"
+	pfv3d_display *_pfv3d_display = new pfv3d_display(_oo, _count_new_triangles, _vertices, _triangles);
 	/* === Variables === */
 
 
@@ -115,7 +128,9 @@ class pfv3d
 	/* ############################## Display ############################## */
 	/* === Call the visualiser === */
 	public:
-	inline void display () const { _pfv3d_display->display_frontier(0, 1); }
+	inline void display () const {
+		_pfv3d_display->display_frontier(0, 1);
+	}
 
 	private:
 	inline
@@ -202,11 +217,11 @@ class pfv3d
 		/* Clear removal sets */
 		for(i = 0; i < 3; ++i) _rem[i].clear();
 		/* Delete all vertices */
-		for(it = _all_vertices.begin(); it != _all_vertices.end(); it = _all_vertices.begin()) {
-			_all_vertices.erase(it); delete *it; }
+		for(it = _all_vertices.begin(); it != _all_vertices.end(); ++it) delete *it;
+		_all_vertices.clear();
 		for(i = 0; i < 3; ++i) _vertices[i].clear();
 		/* Delete all triangles */
-		for(i = 0; i < 3; ++i) { _triangles[i].clear(); _p_to_ts[i].clear(); }
+		for(i = 0; i < 3; ++i) { _triangles[i].clear(); _p_to_ts[i].clear(); _count_new_triangles[i] = 0; }
 	}
 	/* === Clear frontier === */
 
@@ -249,7 +264,7 @@ class pfv3d
 			fprintf(f, "%.15lf %.15lf %.15lf\n", (*it)->_x[0], (*it)->_x[1], (*it)->_x[2]); (*it)->_aid = ++i; }
 		for(i = 0; i < 3; ++i)
 			for(_List_T::const_iterator it = _triangles[i].cbegin(); it != _triangles[i].cend(); ++it)
-				fprintf(f, "%d %d %d\n", it->_v[0]->_aid, it->_v[1]->_aid, it->_v[2]->_aid);
+				fprintf(f, "%lu %lu %lu\n", it->_v[0]->_aid, it->_v[1]->_aid, it->_v[2]->_aid);
 		fclose(f);
 	}
 	/* === Export data to file === */
@@ -269,9 +284,9 @@ class pfv3d
 		for(int i = 0; i < 3; ++i) {
 			_points[i].clear(); _add[i].clear(); _rem[i].clear(); _vertices[i].clear();
 			_triangles[i].clear(); _p_to_ts[i].clear();
+			_limits[i][0] = DMIN; _limits[i][1] = DMAX;
+			_count_new_triangles[i] = 0;
 		}
-		_limits[0][0] = _limits[1][0] = _limits[2][0] = DMIN;
-		_limits[0][1] = _limits[1][1] = _limits[2][1] = DMAX;
 	}
 	/* === Clear all data === */
 
@@ -334,8 +349,8 @@ class pfv3d
 	/* ##################################################################### */
 
 
-	/* #################################################################### */
-	/* ############################## Limits ############################## */
+	/* ##################################################################### */
+	/* ######################### Limits / Extremes ######################### */
 	/* === Verify and update limits before computing frontier === */
 	private:
 	void
@@ -368,11 +383,13 @@ class pfv3d
 			if((*it)->_state == -1) { p = *it;
 				/* If next point has same coordinate - maintain removing point to force facet recomputation */
 				if(it.has_next() && p->_x[x] == (*it.next())->_x[x] && (*it.next())->_state == 0) break;
-				/* Remove triangles created by the point and remove it from points and removal sets */
-				_rem_triangles(x, *it);
-				_points[x].erase(*it); _rem[x].erase(*it);
+				/* Remove triangles created by the point and remove it from dimension point and removal sets */
+				_rem_triangles(x, p);
+				_points[x].erase(it); _rem[x].erase(p);
 				/* If point would be beyond the new extreme - pull it back inside between the extreme and the limit */
-				if(!(_of[x](p->_x[x], extreme))) p->_x[x] = (extreme + limits[_oo[x]^1]) / 2.0;
+				if(!(_of[x](p->_x[x], extreme))) {
+					_all_points.erase(p); p->_x[x] = (extreme + limits[_oo[x]^1]) / 2.0; _all_points.insert(p);
+				} 
 			}
 		}
 
@@ -382,12 +399,12 @@ class pfv3d
 		/* If extremes have extended - update coordinates and reinsert vertices in the hashtable */
 		if(_of[x](_extremes[x], extreme))
 			for(; !it.is_sentinel() && (*it)->_x[x] == _extremes[x]; ++it, p = *it) {
-				_all_vertices.erase(p); p->_x[x] = extreme; _all_vertices.insert(p); }
+				_all_vertices.erase(p); p->_x[x] = extreme; p->_modified = 1; _all_vertices.insert(p); }
 		/* If shrunk - update coordinates and reinsert vertices in the hastable and trees */
 		else
 			for(; !it.is_sentinel() && (*it)->_x[x] == _extremes[x]; it = _vertices[x].rbegin(), p = *it) {
 				for(i = 0; i < 3; ++i) _vertices[i].erase(p);
-				_all_vertices.erase(p); p->_x[x] = extreme; _all_vertices.insert(p);
+				_all_vertices.erase(p); p->_x[x] = extreme; p->_modified = 1; _all_vertices.insert(p);
 				for(i = 0; i < 3; ++i) _vertices[i].insert(p);
 			}
 
@@ -422,14 +439,14 @@ class pfv3d
 
 		/* Translate vertices to the new extremes (and reinsert them in the hashtable) */
 		for(Point *p = *it; !it.is_sentinel() && (*it)->_x[x] == _extremes[x]; ++it, p = *it) {
-			_all_vertices.erase(p); p->_x[x] = extreme; _all_vertices.insert(p); }
+			_all_vertices.erase(p); p->_x[x] = extreme; p->_modified = 1; _all_vertices.insert(p); }
 
 		/* Update limits and extreme */
 		_limits[x][0] = limits[0]; _limits[x][1] = limits[1]; _extremes[x] = extreme;
 	}
 	/* === Verify and update limits after computing frontier === */
-	/* ############################## Limits ############################## */
-	/* #################################################################### */
+	/* ######################### Limits / Extremes ######################### */
+	/* ##################################################################### */
 
 	/* ##################################################################### */
 	/* ############################## Compute ############################## */
@@ -453,7 +470,6 @@ class pfv3d
 		for(i = 0; i < 3; ++i) _verify_limits_before(i);
 
 		/* Call each coordinate sweep */
-		// for(i = 0; i < 3; ++i) _threads[i] = std::thread(&pfv3d::_sweep, this, i);
 		// _threads[0] = std::thread(&pfv3d::_sweep<0, 1, 2>, this);
 		// _threads[1] = std::thread(&pfv3d::_sweep<1, 2, 0>, this);
 		// _threads[2] = std::thread(&pfv3d::_sweep<2, 0, 1>, this);
@@ -490,24 +506,24 @@ class pfv3d
 
  	/* === Perform a coordinate sweep for each of the three dimensions === */
 	private:
-	template <int x0, int x1, int x2>
+	template <int X0, int X1, int X2>
 	void
 	_sweep ()
 	{
 		/* Insert sentinels in the projection tree */
 		Point *sentinels[2];
 		double sentinel_coord[2][3] = {{0, 0, 0}, {0, 0, 0}};
-		sentinel_coord[0][x1] = _extremes[x1]; sentinel_coord[1][x2] = _extremes[x2];
-		if(_oo[x1] == 0) sentinel_coord[1][x1] = DMIN; else sentinel_coord[1][x1] = DMAX;
-		if(_oo[x2] == 0) sentinel_coord[0][x2] = DMIN; else sentinel_coord[0][x2] = DMAX;
-		_projection[x0].insert(sentinels[0] = new Point(&sentinel_coord[0][0], 1));
-		_projection[x0].insert(sentinels[1] = new Point(&sentinel_coord[1][0], 1));
+		sentinel_coord[0][X1] = _extremes[X1]; sentinel_coord[1][X2] = _extremes[X2];
+		if(_oo[X1] == 0) sentinel_coord[1][X1] = DMIN; else sentinel_coord[1][X1] = DMAX;
+		if(_oo[X2] == 0) sentinel_coord[0][X2] = DMIN; else sentinel_coord[0][X2] = DMAX;
+		_projection[X0].insert(sentinels[0] = new Point(&sentinel_coord[0][0], 1));
+		_projection[X0].insert(sentinels[1] = new Point(&sentinel_coord[1][0], 1));
 
 		/* Perform the sweep */
 		bool redo, save_break = 0;
-		int to_add = _add[x0].size(), to_rem = _rem[x0].size(), add_in = 0, rem_in = 0;
+		int to_add = _add[X0].size(), to_rem = _rem[X0].size(), add_in = 0, rem_in = 0;
 		Point *point, *saved = nullptr;
-		_Tree_P::iterator it = _points[x0].begin(), it_add = _add[x0].begin(), it_rem = _rem[x0].begin();
+		_Tree_P::iterator it = _points[X0].begin(), it_add = _add[X0].begin(), it_rem = _rem[X0].begin();
 
 		for( ; !it.is_sentinel() && (add_in || rem_in || to_add || to_rem || saved || save_break); ++it) {	
 			point = *it;
@@ -519,23 +535,23 @@ class pfv3d
 			/* If there is stiil points marked for removal or addition in the tree - (re)compute its triangles */
 			else if(add_in > 0 || rem_in > 0) redo = 1;
 			/* If it has the same sweep coordinate than the next to be added - (re)compute its triangles */
-			else if(to_add > 0 && point->_x[x0] == (*it_add)->_x[x0]) redo = 1;
+			else if(to_add > 0 && point->_x[X0] == (*it_add)->_x[X0]) redo = 1;
 			/* If it has the same sweep coordinate than the next to be removed - (re)compute its triangles */
-			else if(to_rem > 0 && point->_x[x0] == (*it_rem)->_x[x0]) redo = 1;
-			/* If the case of equal sweep coordinates (x0) has occured - (re)compute its triangles */
+			else if(to_rem > 0 && point->_x[X0] == (*it_rem)->_x[X0]) redo = 1;
+			/* If the case of equal sweep coordinates (X0) has occured - (re)compute its triangles */
 			else if(saved != nullptr) redo = 1;
-			/* If the case where the equal sweep coordinates case (x0) has been broken - (re)compute its triangles */
+			/* If the case where the equal sweep coordinates case (X0) has been broken - (re)compute its triangles */
 			else if(save_break == 1) { save_break = 0; redo = 1; }
 			/* Otherwise - only insert it in the projection tree */
 			else redo = 0;
 
 			/* Insert the point in the projection tree */
-			if(!redo) { if(point->_optimal) _insert_only<x0, x1, x2>(point, rem_in); }
+			if(!redo) { if(point->_optimal) _insert_only<X0, X1, X2>(point, rem_in); }
 			/* (Re)Compute the facet generated by the point */
 			else {
-				point->_optimal = _facet<x0, x1, x2>(it, saved, add_in, rem_in, save_break);
+				point->_optimal = _facet<X0, X1, X2>(it, saved, add_in, rem_in, save_break);
 				/* If point is not optimal - add it to list for further removal (if requested) */
-				if(x0 == 0) if(_rem_non_optimal == 1 && point->_optimal == 0) _non_optimal.insert(point);
+				if(X0 == 0) if(_rem_non_optimal == 1 && point->_optimal == 0) _non_optimal.insert(point);
 				if(_display_mode == 2 || _display_mode == 4) _display();
 			}
 
@@ -545,36 +561,36 @@ class pfv3d
 		}
 		
 		/* Clear projection tree and sentinels */
-		_projection[x0].clear();
+		_projection[X0].clear();
 		delete sentinels[0]; delete sentinels[1];
 	}
 	/* === Perform a coordinate sweep for each of the three dimensions === */
 
 	/* === Insert point in the projection tree and update the latter === */
 	private:
-	template <int x0, int x1, int x2>
+	template <int X0, int X1, int X2>
 	void
 	_insert_only (Point *point, int &rem_in)
 	{
 		/* If point is marked for removal - remove triangles previously created by it */
-		if(point->_state == -1) _rem_triangles(x0, point);
+		if(point->_state == -1) _rem_triangles(X0, point);
 
 		/* Insert point in the projection tree */
-		_Tree_P::iterator p_it = _projection[x0].insert(point).first;
+		_Tree_P::iterator p_it = _projection[X0].insert(point).first;
 		/* If point is not optimal - remove it from the projection tree and exit function */
-		if(!(_of[x2](point->_x[x2], (*p_it.prev())->_x[x2]))) { _projection[x0].erase(p_it); return; } 
+		if(!(_of[X2](point->_x[X2], (*p_it.prev())->_x[X2]))) { _projection[X0].erase(p_it); return; } 
 		/* If point is optimal and marked for removal - update their number in the projection tree */ 
 		else if(point->_state == -1) ++rem_in;
 
 		/* Cycle to process dominated points until one that is not dominated is reached */
 		_Tree_P::iterator current = p_it.next(), tmp_it;
-		for( ; !(_of[x2]((*current)->_x[x2], point->_x[x2])); current = tmp_it) {
+		for( ; !(_of[X2]((*current)->_x[X2], point->_x[X2])); current = tmp_it) {
 			tmp_it = current.next();
 			/* Points marked for removal can only remove other points marked for removal and
 			   maintained points can only remove other maintained points */
 			if(point->_state == (*current)->_state) {
 				/* Remove current point from the projection tree */
-				_projection[x0].erase(current);
+				_projection[X0].erase(current);
 				/* If it was a point marked for removal - update their number in the projection tree */
 				if(point->_state == -1) --rem_in;
 			}
@@ -584,43 +600,43 @@ class pfv3d
 
 	/* === (Re)Compute the facet generated by a point === */
 	private:
-	template <int x0, int x1, int x2>
+	template <int X0, int X1, int X2>
 	bool
 	_facet (_Tree_P::iterator &p, Point *&saved, int &add_in, int &rem_in, bool &save_break)
 	{
 		Point *point = *p;
 
 		/* Remove triangles previously created by the point */
-		_rem_triangles(x0, point);
+		_rem_triangles(X0, point);
 
 		/* Insert point in the projection tree */
-		_Tree_P::iterator p_it = _projection[x0].insert(point).first, tmp_it;
+		_Tree_P::iterator p_it = _projection[X0].insert(point).first, tmp_it;
 		/* Get the predecessor (it must not be marked for removal) */
 		for(tmp_it = p_it.prev(); (*tmp_it)->_state == -1; tmp_it = tmp_it.prev()) {}
 		/* If point is not optimal - remove it from the projection tree and exit function */
-		if(!(_of[x2](point->_x[x2], (*tmp_it)->_x[x2]))) { _projection[x0].erase(p_it); return 0; } 
+		if(!(_of[X2](point->_x[X2], (*tmp_it)->_x[X2]))) { _projection[X0].erase(p_it); return 0; } 
 		/* If point is optimal and marked for addition - update their number in the projection tree */ 
 		else if(point->_state == 1) ++add_in;
 
 		/* Get the intersected point in the projection tree */
 		_Tree_P::iterator current = p_it.next();
 		/* Find the successor (it must not be marked for removal) */
-		for( ; (*current)->_x[x1] == point->_x[x1] && (*current)->_state == -1; current = p_it.next()) {
+		for( ; (*current)->_x[X1] == point->_x[X1] && (*current)->_state == -1; current = p_it.next()) {
 			/* Successor is partially dominated and is marked for removal - remove it from the projection tree
 			   and update their number in the projection tree */
-			_projection[x0].erase(current); --rem_in; }
-		/* If successor does not have an equal x1 coordinate - intersected point is the predecessor obtained earlier */
-		if((*current)->_x[x1] != point->_x[x1]) current = tmp_it;
+			_projection[X0].erase(current); --rem_in; }
+		/* If successor does not have an equal X1 coordinate - intersected point is the predecessor obtained earlier */
+		if((*current)->_x[X1] != point->_x[X1]) current = tmp_it;
 
 		/* Create vertex 1 */
 		Point *vertices[3];
-		vertices[0] = _add_vertex(x0, point->_x[x1], (*current)->_x[x2], point->_x[x0]);
+		vertices[0] = _add_vertex<X0, X1, X2>(point->_x[X0], point->_x[X1], (*current)->_x[X2]);
 
 		/* If intersected point is partially dominated - remove it from the representation tree */
-		if(current != tmp_it) { // if((*current)->_x[x1] == point->_x[x1]) {
+		if(current != tmp_it) { // if((*current)->_x[X1] == point->_x[X1]) {
 			/* If it was a point marked for addition - update their number in the projection tree */
 			if((*current)->_state == 1) --add_in;
-			_projection[x0].erase(current);
+			_projection[X0].erase(current);
 		}
 
 		/* Cycle to process points until one that is intercected is reached */
@@ -631,33 +647,33 @@ class pfv3d
 				tmp_it = current.next();
 				/* Successor is marked for removal. If it also is dominated - remove it from the projection
 				   tree and update their number in the projection tree */
-				if(!(_of[x2]((*current)->_x[x2], point->_x[x2]))) { _projection[x0].erase(current); --rem_in; }
+				if(!(_of[X2]((*current)->_x[X2], point->_x[X2]))) { _projection[X0].erase(current); --rem_in; }
 			}
 
-			/* If the previous point called into this function has the same sweep coordinate (x0) as the
+			/* If the previous point called into this function has the same sweep coordinate (X0) as the
 			   current one - recover saved vertex 2 */
 			if(saved != nullptr) vertices[1] = saved;
 			/* If does not - create vertex 2 */
-			else vertices[1] = _add_vertex(x0, (*current)->_x[x1], vertices[0]->_x[x2], point->_x[x0]);
+			else vertices[1] = _add_vertex<X0, X1, X2>(point->_x[X0], (*current)->_x[X1], vertices[0]->_x[X2]);
 
 			/* If current point is not fully dominated - leave cycle */
-			if(!(_of[x2](point->_x[x2], (*current)->_x[x2]))) break;
+			if(!(_of[X2](point->_x[X2], (*current)->_x[X2]))) break;
 
 			/* Create vertex 3 */
-			vertices[2] = _add_vertex(x0, (*current)->_x[x1], (*current)->_x[x2], point->_x[x0]);
+			vertices[2] = _add_vertex<X0, X1, X2>(point->_x[X0], (*current)->_x[X1], (*current)->_x[X2]);
 
 			/* Add triangles 103 and 123 (being 0 the point called into this function) */
-			_add_triangle(x0, *p_it, vertices[0], *p_it, vertices[2]);
-			_add_triangle(x0, *p_it, vertices[0], vertices[1], vertices[2]);
+			_add_triangle(X0, *p_it, vertices[0], *p_it, vertices[2]);
+			_add_triangle(X0, *p_it, vertices[0], vertices[1], vertices[2]);
 
-			/* There is no case of equal sweep coordinates (x0) (analysed only after cycle, when ending this function) */
+			/* There is no case of equal sweep coordinates (X0) (possible only after cycle, ending of this function) */
 			saved = nullptr;
 
 			/* Remove current point from the projection tree (it is fully dominated) */
 			/* If it was a point marked for addition - update their number in the projection tree */
 			if((*current)->_state == 1) --add_in;
 			tmp_it = current.next();
-			_projection[x0].erase(current);
+			_projection[X0].erase(current);
 			/* Vertex 3 is convertex into vertex 1 */
 			vertices[0] = vertices[2];
 		}
@@ -665,37 +681,37 @@ class pfv3d
 		/* Find the next point to be called into this function (must not be marked for removal) */
 		_Tree_P::iterator tmp2_it = p.next();
 		for( ; !tmp2_it.is_sentinel() && (*tmp2_it)->_state == -1; tmp2_it = tmp2_it.next()) {}
-		/* If it has an equal sweep coordinate (x0) as the point called into this function, it is not dominated by the
+		/* If it has an equal sweep coordinate (X0) as the point called into this function, it is not dominated by the
 		   latter, and it intersects the latter in non dominated space - the case of equal sweep coordinates occurs */
-		if(!tmp2_it.is_sentinel() && point->_x[x0] == (*tmp2_it)->_x[x0]
-		   && _of[x2]((*tmp2_it)->_x[x2], point->_x[x2])
-		   && _of[x1]((*tmp2_it)->_x[x1], (*current)->_x[x1])) {
+		if(!tmp2_it.is_sentinel() && point->_x[X0] == (*tmp2_it)->_x[X0]
+		   && _of[X2]((*tmp2_it)->_x[X2], point->_x[X2])
+		   && _of[X1]((*tmp2_it)->_x[X1], (*current)->_x[X1])) {
 			/* Create vertex 3 */
-			vertices[2] = _add_vertex(x0, (*tmp2_it)->_x[x1], point->_x[x2], point->_x[x0]);
+			vertices[2] = _add_vertex<X0, X1, X2>(point->_x[X0], (*tmp2_it)->_x[X1], point->_x[X2]);
 			/* Save vertex 2 for next function */
 			saved = vertices[1];
 		}
-		/* The case of qual sweep coordinates (x0) does not occur (default case) */
+		/* The case of qual sweep coordinates (X0) does not occur (default case) */
 		else {
 			/* Create vertex 3 */
-			vertices[2] = _add_vertex(x0, (*current)->_x[x1], point->_x[x2], point->_x[x0]);
-			/* There is no case of equal sweep coordinates (x0) */
+			vertices[2] = _add_vertex<X0, X1, X2>(point->_x[X0], (*current)->_x[X1], point->_x[X2]);
+			/* There is no case of equal sweep coordinates (X0) */
 			saved = nullptr;	
 			/* If intersected point is partially dominated - remove it from the representation tree */
-			if((*current)->_x[x2] == point->_x[x2]) {
-				/* If intersected point was marked for addition and breaks the case of equal sweep coordinates (x0) */
-				if((*current)->_state == 1 && !tmp2_it.is_sentinel() && point->_x[x0] == (*tmp2_it)->_x[x0]
-				   && _of[x2]((*tmp2_it)->_x[x2], point->_x[x2]) && (*tmp2_it)->_state == 0) save_break = 1;
+			if((*current)->_x[X2] == point->_x[X2]) {
+				/* If intersected point was marked for addition and breaks the case of equal sweep coordinates (X0) */
+				if((*current)->_state == 1 && !tmp2_it.is_sentinel() && point->_x[X0] == (*tmp2_it)->_x[X0]
+				   && _of[X2]((*tmp2_it)->_x[X2], point->_x[X2]) && (*tmp2_it)->_state == 0) save_break = 1;
 
 				/* If it was a point marked for addition - update their number i\n the projection tree */
 				if((*current)->_state == 1) --add_in;
-				_projection[x0].erase(current);
+				_projection[X0].erase(current);
 			}
 		}
 
 		/* Add triangles 103 and 123 (being 0 the point called into this function) */
-		_add_triangle(x0, *p_it, vertices[0], *p_it, vertices[2]);
-		_add_triangle(x0, *p_it, vertices[0], vertices[1], vertices[2]);
+		_add_triangle(X0, *p_it, vertices[0], *p_it, vertices[2]);
+		_add_triangle(X0, *p_it, vertices[0], vertices[1], vertices[2]);
 
 		return 1;
 	}
@@ -708,11 +724,12 @@ class pfv3d
 	/* ############################# Elements ############################# */
 	/* === Add vertex === */
 	private:
+	template <int X0, int X1, int X2>
 	Point *
-	_add_vertex (int x, double x1, double x2, double x3)
+	_add_vertex (double x1, double x2, double x3)
 	{
 		double coordinates[3];
-		coordinates[_po[x][0]] = x1; coordinates[_po[x][1]] = x2; coordinates[_po[x][2]] = x3;
+		coordinates[X0] = x1; coordinates[X1] = x2; coordinates[X2] = x3;
 		Point *point = new Point(coordinates);
 		_mutex_all_vertices.lock();
 		auto result = _all_vertices.insert(point);
@@ -734,6 +751,7 @@ class pfv3d
 		_mutex_vertices.lock();
 		_p_to_ts[x].insert({p, _triangles[x].insert(_triangles[x].end(), Triangle(p1, p2, p3))});
 		++p1->_n_tri; ++p2->_n_tri; ++p3->_n_tri;
+		++_count_new_triangles[x];
 		_mutex_vertices.unlock();
 	}
 	/* === Add triangle === */
@@ -750,11 +768,15 @@ class pfv3d
 			_mutex_vertices.lock();
 			for(int i = 0; i < 3; i++)
 				/* Delete vertex if it ceases to have associated triangles and it wasn't given by the user */
+
+				// IMPLEMENT FLAG STATING THAT POINT IS BEING USED IN THE FACET FUNCTION (NOT TO DELETE)
+
 				if(--t->_v[i]->_n_tri == 0 && t->_v[i]->_input == 0) {
 					_mutex_all_vertices.lock(); _all_vertices.erase(t->_v[i]); _mutex_all_vertices.unlock();
 					for(int j = 0; j < 3; ++j) _vertices[j].erase(t->_v[i]);
 					_mutex_all_vertices.lock(); _all_vertices.erase(point); _mutex_all_vertices.unlock(); delete t->_v[i]; }
 			_mutex_vertices.unlock();
+			if(t->_did == -1) --_count_new_triangles[x];
 			_triangles[x].erase((*it).second);
 		}
 		_p_to_ts[x].erase(point);

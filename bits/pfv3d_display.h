@@ -1,32 +1,11 @@
-#ifndef _PFV3D_DISPLAY_H_
-#define _PFV3D_DISPLAY_H_
-
-#include <signal.h>
-#include <math.h>
-#include <algorithm>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <GL/glew.h>
-#include <GL/glu.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
-#include <X11/Xlib.h>
-
 class pfv3d_display
 {
-	#define DMAX std::numeric_limits<double>::max()
-	#define DMIN std::numeric_limits<double>::lowest()
-	typedef std::list<Triangle> _List_T;
-
-
 	/* === Variables === */
 	/* PFV3D Data */
-	bool *_oo;
-	_List_T *_triangles;
+	bool *__oo;
+	int *__count_new_triangles;
+	_Tree_P *__vertices;
+	_List_T *__triangles;
 
 	/* Window */
 	SDL_Window *_window;
@@ -36,7 +15,8 @@ class pfv3d_display
 	/* Thread */
 	bool _running = 1;
 	std::thread _renderer;
-	std::recursive_mutex _mutex_cond, _mutex_data;
+	std::mutex _mutex_cond;
+	std::recursive_mutex _mutex_data;
 	std::condition_variable_any _cond_main, _cond_renderer;
 
 	/* Object */
@@ -61,15 +41,17 @@ class pfv3d_display
 
 	/* Flags and objects data */
 	bool _mode = 0;
-	uint _n_vertices = 0, _vao = 0, _vbo_vertices = 0, _vbo_indices = 0;
-	int *_indices = nullptr;
-	glm::dvec3 *_centres = nullptr;
+	uint _vao, _vbo_vertices, _vbo_indices;
+	int *_indices = nullptr; double *_vertices = nullptr;
+	size_t _size_vertices = 0, _size_triangles = 0, _size_allocated = 0, _size_used = 0;
+	double _allocation_factor = 1.5, _limits[3][2];
 	/* === Variables === */
 
 
 	/* === Constructor/Destructor === */
 	public:
-	pfv3d_display (bool *oo, _List_T *triangles) : _oo(oo), _triangles(triangles)
+	pfv3d_display (bool *oo, int *count_new_triangles, _Tree_P *vertices, _List_T *triangles)
+	    : __oo(oo), __count_new_triangles(count_new_triangles), __vertices(vertices), __triangles(triangles)
 	{
 		/* Window */
 		Display *display = XOpenDisplay(NULL);
@@ -162,13 +144,15 @@ class pfv3d_display
 
 		/* Create display thread */
 		_mutex_cond.lock();
-		_renderer = std::thread(&pfv3d_display::renderer, this);
+		_renderer = std::thread(&pfv3d_display::_render, this);
 		_cond_main.wait(_mutex_cond);
 		_mutex_cond.unlock();
 	}
 
 	~pfv3d_display ()
 	{
+		free(_vertices);
+		free(_indices);
 		_running = 0;
 		_mutex_cond.lock();
 		_cond_renderer.notify_one();
@@ -184,111 +168,179 @@ class pfv3d_display
 	}
 	/* === Constructor/Destructor === */
 
-
-	private:
-	void _process_triangles (double limits[3][2], double *vertices, int d, size_t begin, size_t len)
-	{
-		int i, j, v = begin*18, c = begin-1;
-		double centre[3], normal[3] = {0, 0, 0}; normal[d] = 1;
-		for(_List_T::iterator it = _triangles[d].begin(); it != _triangles[d].end(); ++it) {
-			centre[0] = centre[1] = centre[2] = 0;
-			for(i = 0; i < 3; ++i) {
-				for(j = 0; j < 3; ++j, ++v) {
-					centre[j] += vertices[v] = it->_v[i]->_x[j];
-					if(vertices[v] < limits[j][0]) limits[j][0] = vertices[v];
-					if(vertices[v] > limits[j][1]) limits[j][1] = vertices[v];
-				}
-				for(j = 0; j < 3; ++j, ++v) vertices[v] = normal[j];
-			}
-			_centres[++c] = glm::dvec3(centre[0]/3.0, centre[1]/3.0, centre[2]/3.0);
-		}
-	}
-
 	private:
 	void
-	_alert_renderer (bool mode)
+	_notify_renderer (bool mode)
 	{
 		_mode = mode;
 		_mutex_cond.lock();
 		_cond_renderer.notify_one();
 		if(_mode == 0) _cond_main.wait(_mutex_cond);
-		_mutex_cond.unlock(); }
+		_mutex_cond.unlock();
+	}
+
+	private:
+	bool
+	_pre_process (size_t &size_new_triangles, bool &allocation)
+	{
+		/* If there is not enough allocated space - organize allocation */
+		if(_size_used + size_new_triangles > _size_allocated) {
+			/* If number of elements is low enough - no need to allocate more space, just re-place all triangles */
+			if(_size_triangles < _size_allocated/_allocation_factor) return 0;
+			/* Otherwise - allocate more space and process only new triangles and modified vertices */
+			else {
+				_size_allocated = (_size_used + size_new_triangles) * _allocation_factor;
+				_vertices = (double *) realloc(_vertices, _size_allocated * 18 * sizeof(double));
+				_indices  =    (int *) realloc(_indices,  _size_allocated *  3 * sizeof(int));
+				allocation = 1;
+				return _size_used != 0;
+			}
+		}
+		return 1;
+	}
+
+	private:
+	template <typename It>
+	void
+	_process_all (int x, It it, size_t begin, size_t end)
+	{
+		int j, k;
+		size_t vi = begin * 18, ii = begin * 3;
+		double normal[3] = {0, 0, 0}; normal[x] = 1;
+		for(size_t i = begin; i < end; ++i, ++it) {
+			it->_did = i;
+			for(j = 0; j < 3; ++j) {
+				for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = it->_v[j]->_x[k];
+				for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = normal[k];
+				it->_v[j]->_modified = 0;
+			}
+			for(j = 0; j < 3; ++j, ++ii) _indices[ii] = ii;
+		}
+	}
+
+	private:
+	template <typename It>
+	void
+	_process_new (int x, It it, size_t begin, size_t end, size_t ti, short int increment)
+	{
+		int j, k;
+		size_t vi, ii = begin * 3;
+		double normal[3] = {0, 0, 0}; normal[x] = 1;
+		for(size_t i = begin; i < end; ++i, ++it) {
+			if(it->_did == -1) {
+				it->_did = ti;
+				vi = ti * 18;
+				ti += increment;
+				for(j = 0; j < 3; ++j) {
+					for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = it->_v[j]->_x[k];
+					for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = normal[k];
+					it->_v[j]->_modified = 0;
+				}
+			}
+			else {
+				for(j = 0; j < 3; ++j) {
+					if(it->_v[j]->_modified == 0) continue;
+					vi = it->_did * 18 + j * 6;
+					for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = it->_v[j]->_x[k];
+					for(k = 0; k < 3; ++k, ++vi) _vertices[vi] = normal[k];
+					it->_v[j]->_modified = 0;
+				}
+			}
+			for(j = 0; j < 3; ++j, ++ii) _indices[ii] = it->_did*3 + j;
+		}
+	}
 
 	/* === Activate frontier display === */
 	public:
-	void display_frontier (bool mode, bool reset)
+	void
+	display_frontier (bool mode, bool reset)
 	{
-		size_t n_triangles012[3] = {_triangles[0].size(), _triangles[1].size(), _triangles[2].size()};
-		size_t n_triangles = n_triangles012[0] + n_triangles012[1] + n_triangles012[2];
-
-		/* If there is no triangles to display - alert the redenrer and exit */
-		if(n_triangles == 0) { _n_vertices = 0; _alert_renderer(mode); _mode = 0; return; }
+		size_t count_triangles[3] = {__triangles[0].size(), __triangles[1].size(), __triangles[2].size()};
+		size_t size_new_triangles = __count_new_triangles[0] + __count_new_triangles[1] + __count_new_triangles[2];		
 		
-		/* Get data */
-		int i;
-		/* Size = (n_triangles * 3 vertices) * 3 dimensions * (coordinates + normals) */
-		size_t size_v = (_n_vertices = n_triangles * 3) * 3 * 2 * sizeof(double);
-		double *vertices = (double *) malloc(size_v);
-		double tmp_limits[3][3][2] = {{{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}},
-		                              {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}},
-		                              {{DMAX, DMIN}, {DMAX, DMIN}, {DMAX, DMIN}}};
-		_centres = (glm::dvec3 *) realloc(_centres, n_triangles*sizeof(glm::dvec3));
+		_size_triangles = count_triangles[0] + count_triangles[1] + count_triangles[2];
+		
+		/* If there is no triangles to display - notify the renderer and exit */
+		if(_size_triangles == 0) { _size_vertices = 0; _notify_renderer(mode); _mode = 0; return; }
 
-		std::thread workers[3] = {
-			std::thread(&pfv3d_display::_process_triangles, this, tmp_limits[0], vertices, 0, 0,               n_triangles012[0]),
-			std::thread(&pfv3d_display::_process_triangles, this, tmp_limits[1], vertices, 1, n_triangles012[0],         n_triangles012[1]),
-			std::thread(&pfv3d_display::_process_triangles, this, tmp_limits[2], vertices, 2, n_triangles012[0]+n_triangles012[1], n_triangles012[2])	
-		};
-		workers[0].join(); workers[1].join(); workers[2].join();
-		double limits[3][2];
+		int i, j;
+		size_t begin = 0, end = 0, index = _size_used;
+		std::thread threads[3][2];
+
+		bool allocation = 0;
+		/* (Re)Process/(Re-)place all triangles - write data contiguously */
+		if(!_pre_process(size_new_triangles, allocation)) {
+			for(i = 0; i < 3; ++i) {
+				begin = end; end += (size_t)(count_triangles[i]/2.0+0.5);
+				threads[i][0] = std::thread(&pfv3d_display::_process_all<_List_T::iterator>,
+					this, i, __triangles[i]. begin(), begin, end);
+				begin = end; end += (size_t)(count_triangles[i]/2.0);
+				threads[i][1] = std::thread(&pfv3d_display::_process_all<_List_T::reverse_iterator>,
+					this, i, __triangles[i].rbegin(), begin, end);
+			}
+			_size_used = _size_triangles;
+		}
+		/* Process new triangles and modified vertices */
+		else {
+			for(i = 0; i < 3; ++i) {
+				begin = end; end += (size_t)(count_triangles[i]/2.0+0.5);
+				threads[i][0] = std::thread(&pfv3d_display::_process_new<_List_T::iterator>,
+					this, i, __triangles[i]. begin(), begin, end, index, 1);
+				begin = end; end += (size_t)(count_triangles[i]/2.0);
+				index += __count_new_triangles[i];
+				threads[i][1] = std::thread(&pfv3d_display::_process_new<_List_T::reverse_iterator>,
+					this, i, __triangles[i].rbegin(), begin, end, index-1, -1);
+			}
+			_size_used += size_new_triangles;
+		}
+		for(i = 0; i < 3; ++i) for(j = 0; j < 2; ++j) threads[i][j].join();
+
+		/* Update frontier limits */
 		for(i = 0; i < 3; ++i) {
-			limits[i][0] = fmin(tmp_limits[0][i][0], fmin(tmp_limits[1][i][0], tmp_limits[2][i][0]));
-			limits[i][1] = fmax(tmp_limits[0][i][1], fmax(tmp_limits[1][i][1], tmp_limits[2][i][1]));
+			for(_Tree_P::iterator it = __vertices[i].begin(); !it.is_sentinel(); ++it)
+				if((*it)->_n_tri > 0) { _limits[i][__oo[i]]   = (*it)->_x[i]; break; }
+			for(_Tree_P::reverse_iterator it = __vertices[i].rbegin(); !it.is_sentinel(); ++it)
+				if((*it)->_n_tri > 0) { _limits[i][__oo[i]^1] = (*it)->_x[i]; break; }
 		}
 
-
-
-
-
-
+		/* Update display data */
 		_mutex_data.lock();
-		size_t size_indices = _n_vertices*sizeof(int);
-		_indices = (int *) realloc(_indices, size_indices);
+
+		_size_vertices = _size_triangles * 3;
 
 		/* Bind data */
 		glBindBuffer(GL_ARRAY_BUFFER, _vbo_vertices);
-		glBufferData(GL_ARRAY_BUFFER, size_v, vertices, GL_STATIC_DRAW);
+		if(allocation) glBufferData(GL_ARRAY_BUFFER, _size_allocated * 18 * sizeof(double), NULL, GL_DYNAMIC_DRAW);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, _size_used * 18 * sizeof(double), _vertices);
 		glVertexAttribPointer(0, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)0);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(1, 3, GL_DOUBLE, GL_FALSE, 6*sizeof(double), (GLvoid*)(3*sizeof(double)));
 		glEnableVertexAttribArray(1);
 
 		/* Initialise object and camera variables */
-		_obj_span = glm::distance(glm::dvec2(limits[0][1], limits[1][0]), glm::dvec2(limits[0][0], limits[1][1]));
-		_obj_span = fmax(glm::distance(glm::dvec3(limits[0][0], limits[1][0], limits[2][1]),
-		                              glm::dvec3(limits[0][1], limits[1][1], limits[2][0])), _obj_span);
+		_obj_span = glm::distance(glm::dvec3(_limits[0][0], _limits[1][0], _limits[2][0]),
+		                          glm::dvec3(_limits[0][1], _limits[1][1], _limits[2][1]));
 		
-		for(i = 0; i < 3; ++i) _obj_initial_look[i] = _cam_initial_look[i] = (limits[i][0]+limits[i][1])/2.0;
+		for(i = 0; i < 3; ++i) _obj_initial_look[i] = _cam_initial_look[i] = (_limits[i][0]+_limits[i][1])/2.0;
 		
 		_obj_initial_quat = glm::quat(1, 0, 0, 0);
-		double angle; glm::dvec3 axis = glm::vec3(0, 1, 0);
-		if(_oo[2] == 0) angle = -M_PI/4.0;
-		else               angle =  M_PI/4.0;
+		double angle;
+		glm::dvec3 axis = glm::vec3(0, 1, 0);
+		if(__oo[2] == 0) angle = -M_PI/4.0;
+		else             angle =  M_PI/4.0;
 		_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0));
 		axis[1] = 0; axis[2] = 1; angle = M_PI/4.0;
-		if(_oo[1] == 1) angle += M_PI;
-		if(_oo[0] != _oo[1]) angle += M_PI/2.0;
+		if(__oo[1] == 1) angle += M_PI;
+		if(__oo[0] != __oo[1]) angle += M_PI/2.0;
 		_cam_initial_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_initial_quat;
 		
 		if(_mode == 0 || reset == 1) _reset();
 
-		blend_sort();
+		_blend_sort();
 
 		_mutex_data.unlock();
 
-		free(vertices);
-
-		_alert_renderer(mode);
+		_notify_renderer(mode);
 	}
 	/* === Activate frontier display === */
 
@@ -310,31 +362,31 @@ class pfv3d_display
 
 	/* === Sort triangles by distance to the camera === */
 	private:
-	void blend_sort ()
+	void _blend_sort ()
 	{
 		_mutex_data.lock();
-		int i, j;
-		double *distances = (double *) malloc(_n_vertices/3*sizeof(double));
-		int *indices = (int *) malloc(_n_vertices/3*sizeof(int));
-		_cam_view = glm::dvec3(_cam_translate * _cam_rotate * _cam_initial_view);
+		// int i;
+		// double *distances = (double *) malloc(_size_vertices/3*sizeof(double));
+		// int *indices = (int *) malloc(_size_vertices/3*sizeof(int));
+		// _cam_view = glm::dvec3(_cam_translate * _cam_rotate * _cam_initial_view);
 
-		for(i = 0; i < (int)_n_vertices/3; ++i) {
-			indices[i] = i;
-			distances[i] = glm::distance(glm::dvec3(_obj_rotate * glm::dvec4(_centres[i], 1)), _cam_view);
-		}
-		std::sort(&indices[0], &indices[_n_vertices/3],[&](size_t a, size_t b) { return distances[a] > distances[b]; } );
+		// for(i = 0; i < (int)_size_vertices/3; ++i) {
+			// indices[i] = i;
+			// distances[i] = glm::distance(glm::dvec3(_obj_rotate * glm::dvec4(_centres[i], 1)), _cam_view);
+		// }
+		// std::sort(&indices[0], &indices[_size_vertices/3],[&](size_t a, size_t b) { return distances[a] > distances[b]; } );
 
-		for(i = 0; i < (int)_n_vertices/3; ++i) for(j = 0; j < 3; ++j) _indices[i*3+j] = indices[i]*3+j;
+		// for(i = 0; i < (int)_size_vertices/3; ++i) for(int j = 0; j < 3; ++j) _indices[i*3+j] = indices[i]*3+j;
 
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _vbo_indices);
-	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, _n_vertices*sizeof(int), _indices, GL_STATIC_DRAW);
+	    glBufferData(GL_ELEMENT_ARRAY_BUFFER, _size_triangles*3*sizeof(int), _indices, GL_DYNAMIC_DRAW);
 		_mutex_data.unlock();
 	}
 	/* === Sort triangles by distance to the camera === */
 
-	/* === Renderer thread === */
+	/* === Renderer thread function === */
 	private:
-	void renderer ()
+	void _render ()
 	{
 		bool rendering;
 		SDL_Event event;
@@ -353,15 +405,15 @@ class pfv3d_display
 				while(SDL_PollEvent(&event))
 					switch(event.type) {
 						case SDL_MOUSEMOTION: case SDL_MOUSEBUTTONUP: case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEWHEEL:
-							mouse(event); break;
-						case SDL_KEYUP: case SDL_KEYDOWN: keyboard(event); break;
+							_mouse(event); break;
+						case SDL_KEYUP: case SDL_KEYDOWN: _keyboard(event); break;
 						case SDL_WINDOWEVENT:
 							if(event.window.event == SDL_WINDOWEVENT_RESIZED) {
 								_window_w = event.window.data1; _window_h = event.window.data2; }
 							break;
 						case SDL_QUIT: rendering = 0; SDL_HideWindow(_window); break;
 					}
-				draw();
+				_draw();
 			}
 			_mutex_cond.lock();
 			if(_mode == 0) _cond_main.notify_one();
@@ -369,11 +421,11 @@ class pfv3d_display
 		}
 		pthread_exit(NULL);
 	}
-	/* === Renderer thread === */
+	/* === Renderer thread function === */
 
 	/* === Drawing function === */
 	private:
-	void draw ()
+	void _draw ()
 	{
 		_mutex_data.lock();
 
@@ -418,13 +470,13 @@ class pfv3d_display
 		/* Draw Triangles */
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		// glBindVertexArray(_vao);
-		glDrawElements(GL_TRIANGLES, _n_vertices, GL_UNSIGNED_INT, 0);
+		glDrawElements(GL_TRIANGLES, _size_vertices, GL_UNSIGNED_INT, 0);
 		// glBindVertexArray(0);
 
 		// glLineWidth(2);
 		// glUniform4f(object_colour_location, 1, 1, 1, 1);
 		// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		// glDrawElements(GL_TRIANGLES, _n_vertices, GL_UNSIGNED_INT, 0);
+		// glDrawElements(GL_TRIANGLES, _size_vertices, GL_UNSIGNED_INT, 0);
 
 		glUseProgram(0);
 		SDL_GL_SwapWindow(_window);
@@ -436,7 +488,7 @@ class pfv3d_display
 
 	/* === Keyboard handling === */
 	private:
-	void keyboard (SDL_Event &event)
+	void _keyboard (SDL_Event &event)
 	{
 		switch(event.key.keysym.sym) {
 			case SDLK_r: _reset(); break;
@@ -450,7 +502,7 @@ class pfv3d_display
 
 	/* === Mouse handling === */
 	private:
-	void mouse (SDL_Event &event)
+	void _mouse (SDL_Event &event)
 	{
 		SDL_MouseMotionEvent *motion = &event.motion;
 		SDL_MouseButtonEvent *button = &event.button;
@@ -462,7 +514,7 @@ class pfv3d_display
 					glm::dvec4 translation = glm::dvec4(0, -motion->xrel * cpp, motion->yrel*cpp, 1);
 					_cam_look += glm::dvec3(glm::mat4_cast(_cam_quat) * translation);
 					_cam_translate = glm::translate(glm::dmat4(1), _cam_look);
-					blend_sort();
+					_blend_sort();
 				}
 				if(_right_button == 1) {
 					if(_key_ctrl == 1) {
@@ -470,7 +522,7 @@ class pfv3d_display
 						double angle = motion->xrel / (_screen_w * _mouse_sens) * 2*M_PI;
 						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
 						_cam_rotate = glm::mat4_cast(_cam_quat);
-						blend_sort();
+						_blend_sort();
 					} else if (_key_alt == 1) {
 						double distance = glm::length(glm::vec2(motion->xrel, motion->yrel));
 						glm::dvec3 axis = glm::normalize(glm::dvec3(0, motion->yrel, motion->xrel));
@@ -478,7 +530,7 @@ class pfv3d_display
 						double angle = distance / (_screen_w * _mouse_sens) * 2*M_PI;
 						_obj_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _obj_quat;
 						_obj_rotate = glm::mat4_cast(_obj_quat);
-						blend_sort();
+						_blend_sort();
 					} else if(_key_shift == 1) {
 						glm::vec3 tmp_up = glm::vec3(glm::inverse(_cam_rotate) * _obj_rotate * _cam_initial_up);
 						glm::dvec3 axis = glm::dvec3(0, 0, tmp_up[2] > 0 ? -1 : 1);
@@ -486,7 +538,7 @@ class pfv3d_display
 						double angle = motion->xrel / (_screen_w * _mouse_sens) * 2*M_PI;
 						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
 						_cam_rotate = glm::mat4_cast(_cam_quat);
-						blend_sort();
+						_blend_sort();
 					} else {
 						double distance = glm::length(glm::vec2(motion->xrel, -motion->yrel));
 						glm::dvec3 axis = glm::normalize(glm::dvec3(0, -motion->yrel, -motion->xrel));
@@ -494,7 +546,7 @@ class pfv3d_display
 						double angle = distance / (_screen_w * _mouse_sens) * 2*M_PI;
 						_cam_quat = glm::dquat(cos(angle/2.0), axis * sin(angle/2.0)) * _cam_quat;
 						_cam_rotate = glm::mat4_cast(_cam_quat);
-						blend_sort();
+						_blend_sort();
 					}
 				}
 				_mouse_x = motion->x; _mouse_y = motion->y;
@@ -522,5 +574,3 @@ class pfv3d_display
 	}
 	/* === Mouse handling === */
 };
-
-#endif
