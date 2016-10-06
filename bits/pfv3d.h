@@ -1,6 +1,8 @@
 #ifndef _PFV3D_H_
 #define _PFV3D_H_
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
 #include <math.h>
 #include <limits>
@@ -23,26 +25,36 @@
 #include <SDL2/SDL_opengl.h>
 #include <X11/Xlib.h>
 
-/* === Point structure === */
-struct Point {
-	const bool _input; bool _optimal = 1;
-	int _state = 1;
-	size_t _n_tri = 0, _aid = 0;
-	double _x[3];
-	Point (double x1, double x2, double x3, bool input = 0) : _input(input), _x{x1, x2, x3} {}
-	Point (double *x, bool input = 0) : _input(input), _x{x[0], x[1], x[2]} {}
-};
-/* === Point structure === */
-/* === Triangle structure === */
-struct Triangle {
-	long _did = -1;
-	Point *const _v[3];
-	Triangle (Point *v1, Point *v2, Point *v3) : _v{v1, v2, v3} {}
-};
-/* === Triangle structure === */
+/* === Visualiser blend stuff === */
+float *_distances = nullptr;
+int _blend_compare (int *a, int *b)
+{ return _distances[*a/3] > _distances[*b/3] ? -1 : (_distances[*a/3] < _distances[*b/3] ? 1 : 0); }
+/* === Visualiser blend stuff === */
 
-struct pfv3d
+class pfv3d
 {
+	#define DMAX std::numeric_limits<double>::max()
+	#define DMIN std::numeric_limits<double>::lowest()
+
+	
+	/* === Point structure === */
+	struct Point {
+		const bool _input; bool _optimal = 1;
+		int _state = 1;
+		size_t _n_tri = 0, _aid = 0;
+		double _x[3];
+		Point (double x1, double x2, double x3, bool input = 0) : _input(input), _x{x1, x2, x3} {}
+		Point (double *x, bool input = 0) : _input(input), _x{x[0], x[1], x[2]} {}
+	};
+	/* === Point structure === */
+	/* === Triangle structure === */
+	struct Triangle {
+		Point *const _v[3];
+		Triangle (Point *v1, Point *v2, Point *v3) : _v{v1, v2, v3} {}
+	};
+	/* === Triangle structure === */
+
+
 	typedef std::function<bool (double, double)> _Bin_Func;
 
 
@@ -68,8 +80,6 @@ struct pfv3d
 	/* === Point hash function === */
 
 
-	#define DMAX std::numeric_limits<double>::max()
-	#define DMIN std::numeric_limits<double>::lowest()
 	typedef tree<tree_rb, Point *, point_compare> _Tree_P;
 	typedef std::unordered_set<Point *> _USet_P;
 	typedef std::unordered_set<Point *, point_hash, point_equal> _C_USet_P;
@@ -83,6 +93,8 @@ struct pfv3d
 	double _limits[3][2] = {{DMIN, DMAX}, {DMIN, DMAX}, {DMIN, DMAX}}, _extremes[3];
 	_Bin_Func _of[3];
 
+	_C_USet_P _all_points, _all_vertices;
+
 	point_compare _p_comp[3] = {point_compare(_of,0,1,2), point_compare(_of,1,2,0), point_compare(_of,2,0,1)};
 	_Tree_P _points[3]     = {_Tree_P(_p_comp[0]), _Tree_P(_p_comp[1]), _Tree_P(_p_comp[2])};
 	_Tree_P _add[3]        = {_Tree_P(_p_comp[0]), _Tree_P(_p_comp[1]), _Tree_P(_p_comp[2])};
@@ -90,14 +102,13 @@ struct pfv3d
 	_Tree_P _vertices[3]   = {_Tree_P(_p_comp[0]), _Tree_P(_p_comp[1]), _Tree_P(_p_comp[2])};
 	_Tree_P _projection[3] = {_Tree_P(_p_comp[1]), _Tree_P(_p_comp[2]), _Tree_P(_p_comp[0])};
 
+	_USet_P _non_optimal, _possible_unused_vertices;
+
 	_List_T _triangles[3];
 	_UMMap_PTs _p_to_ts[3];
-
-	_USet_P _non_optimal;
-	_C_USet_P _all_points, _all_vertices;
 		
 	std::thread _threads[3];
-	std::mutex _mutex_vertices, _mutex_all_vertices, _mutex_triangles, _mutex_display;
+	std::mutex _mutex_vertices, _mutex_all_vertices, _mutex_triangles, _mutex_display, _mutex_possible_unused;
 
 	#include "pfv3d_display.h"
 	pfv3d_display *_pfv3d_display = new pfv3d_display(_oo, _vertices, _triangles);
@@ -128,18 +139,17 @@ struct pfv3d
 	/* ############################## Display ############################## */
 	/* === Call the visualiser === */
 	public:
-	inline void display () const {
-		_pfv3d_display->display_frontier(0, 1);
-	}
+	inline void display () const { _pfv3d_display->display_frontier(0, 1); }
 
 	private:
 	inline
 	void
 	_display ()
 	{
-		if(!_display_mode) return;
-		if(_mutex_display.try_lock()) {
+		if(_display_mode && _mutex_display.try_lock()) {
+			_mutex_triangles.lock();
 			_pfv3d_display->display_frontier(1, _display_mode == 1 || _display_mode == 2);
+			_mutex_triangles.unlock();
 			_mutex_display.unlock();
 		}
 	}
@@ -316,6 +326,7 @@ struct pfv3d
 	}
 	/* === Add points to the frontier === */
 
+
 	/* === Remove points from the frontier === */
 	public:
 	inline void rem_points (int n, double *points)
@@ -447,6 +458,7 @@ struct pfv3d
 	/* ######################### Limits / Extremes ######################### */
 	/* ##################################################################### */
 
+
 	/* ##################################################################### */
 	/* ############################## Compute ############################## */
 	/* === Compute the frontier's facets === */
@@ -463,17 +475,26 @@ struct pfv3d
 		if(_points[0].empty()) { _display(); return; }
 
 		int i, j;
+
 		/* Update limits and compute extremes (to be used by the sentinels) */
 		// for(i = 0; i < 3; ++i) _threads[i] = std::thread(&pfv3d::_verify_limits_before, this, i);
 		// for(i = 0; i < 3; ++i) _threads[i].join();
 		for(i = 0; i < 3; ++i) _verify_limits_before(i);
 
 		/* Call each coordinate sweep */
-		// _threads[0] = std::thread(&pfv3d::_sweep<0, 1, 2>, this);
-		// _threads[1] = std::thread(&pfv3d::_sweep<1, 2, 0>, this);
-		// _threads[2] = std::thread(&pfv3d::_sweep<2, 0, 1>, this);
-		// for(i = 0; i < 3; ++i) _threads[i].join();
-		_sweep<0, 1, 2>(); _sweep<1, 2, 0>(); _sweep<2, 0, 1>();
+		_threads[0] = std::thread(&pfv3d::_sweep<0, 1, 2>, this);
+		_threads[1] = std::thread(&pfv3d::_sweep<1, 2, 0>, this);
+		_threads[2] = std::thread(&pfv3d::_sweep<2, 0, 1>, this);
+		for(i = 0; i < 3; ++i) _threads[i].join();
+		// _sweep<0, 1, 2>(); _sweep<1, 2, 0>(); _sweep<2, 0, 1>();
+
+		/* Remove unused vertices (verify if they are really unused) */
+		for(_USet_P::iterator it = _possible_unused_vertices.begin(); it != _possible_unused_vertices.end(); ++it) {
+			if((*it)->_n_tri == 0) {
+				_all_vertices.erase(*it);
+				for(i = 0; i < 3; ++i) _vertices[i].erase(*it);
+				delete *it; } }
+		_possible_unused_vertices.clear();
 
 		/* Remove non optimal points (if requested) */
 		if(_rem_non_optimal == 1)
@@ -502,6 +523,7 @@ struct pfv3d
 		_display();
 	}
 	/* === Compute the frontier's facets === */
+
 
  	/* === Perform a coordinate sweep for each of the three dimensions === */
 	private:
@@ -551,6 +573,7 @@ struct pfv3d
 				point->_optimal = _facet<X0, X1, X2>(it, saved, add_in, rem_in, save_break);
 				/* If point is not optimal - add it to list for further removal (if requested) */
 				if(X0 == 0) if(_rem_non_optimal == 1 && point->_optimal == 0) _non_optimal.insert(point);
+				/* Dynamic display (if set) */
 				if(_display_mode == 2 || _display_mode == 4) _display();
 			}
 
@@ -564,6 +587,7 @@ struct pfv3d
 		delete sentinels[0]; delete sentinels[1];
 	}
 	/* === Perform a coordinate sweep for each of the three dimensions === */
+
 
 	/* === Insert point in the projection tree and update the latter === */
 	private:
@@ -596,6 +620,7 @@ struct pfv3d
 		}
 	}
 	/* === Insert point in the projection tree and update the latter === */
+
 
 	/* === (Re)Compute the facet generated by a point === */
 	private:
@@ -668,7 +693,7 @@ struct pfv3d
 			/* There is no case of equal sweep coordinates (X0) (possible only after cycle, ending of this function) */
 			saved = nullptr;
 
-			/* Remove current point from the projection tree (it is fully dominated) */
+			/* - Remove current point from the projection tree (it is fully dominated) - */
 			/* If it was a point marked for addition - update their number in the projection tree */
 			if((*current)->_state == 1) --add_in;
 			tmp_it = current.next();
@@ -728,57 +753,65 @@ struct pfv3d
 	_add_vertex (double x1, double x2, double x3)
 	{
 		double coordinates[3];
+		/* Create vertex */
 		coordinates[X0] = x1; coordinates[X1] = x2; coordinates[X2] = x3;
 		Point *point = new Point(coordinates);
+		/* Try to insert vertex */
 		_mutex_all_vertices.lock();
 		auto result = _all_vertices.insert(point);
 		_mutex_all_vertices.unlock();
+		/* If the vertex already exists - get pointer and exit */
 		if(!result.second) { delete point; return *result.first; }
+		/* Otherwise - insert it in the trees */
 		else {
 			_mutex_vertices.lock();
 			for(int i = 0; i < 3; ++i) _vertices[i].insert(point);
-			_mutex_vertices.unlock(); }
+			_mutex_vertices.unlock();
+		}
 		return point;
 	}
 	/* === Add vertex === */
+
 
 	/* === Add triangle === */
 	private:
 	void
 	_add_triangle (int x, Point *p, Point *p1, Point *p2, Point *p3)
 	{
-		_mutex_vertices.lock();
+		/* Create and insert triangle */
+		_mutex_triangles.lock();
 		_p_to_ts[x].insert({p, _triangles[x].insert(_triangles[x].end(), Triangle(p1, p2, p3))});
+		_mutex_triangles.unlock();
+		/* Increase the number of associated triangles in each vertex */
 		++p1->_n_tri; ++p2->_n_tri; ++p3->_n_tri;
-		_mutex_vertices.unlock();
 	}
 	/* === Add triangle === */
 
-	/* === Delete triangles */
+
+	/* === Remove triangles generated by a user inputted point */
 	private:
 	void
 	_rem_triangles (int x, Point *point)
 	{
 		Triangle *t;
 		auto range = _p_to_ts[x].equal_range(point);
+		_mutex_triangles.lock();
 		for(auto it = range.first; it != range.second; ++it) {
 			t = &*it->second;
-			_mutex_vertices.lock();
 			for(int i = 0; i < 3; i++)
-				/* Delete vertex if it ceases to have associated triangles and it wasn't given by the user */
-
-				// IMPLEMENT FLAG STATING THAT POINT IS BEING USED IN THE FACET FUNCTION (NOT TO DELETE)
-
+				/* Mark vertex to possible further removal if it ceases to have associated triangles and
+				   it wasn't given by the user (it may be in use by other threads still) */
 				if(--t->_v[i]->_n_tri == 0 && t->_v[i]->_input == 0) {
-					_mutex_all_vertices.lock(); _all_vertices.erase(t->_v[i]); _mutex_all_vertices.unlock();
-					for(int j = 0; j < 3; ++j) _vertices[j].erase(t->_v[i]);
-					_mutex_all_vertices.lock(); _all_vertices.erase(point); _mutex_all_vertices.unlock(); delete t->_v[i]; }
-			_mutex_vertices.unlock();
-			_triangles[x].erase((*it).second);
+					_mutex_possible_unused.lock();
+					_possible_unused_vertices.insert(t->_v[i]);
+					_mutex_possible_unused.unlock(); }
+			/* Remove triangle */
+			_triangles[x].erase(it->second);
 		}
+		_mutex_triangles.unlock();
 		_p_to_ts[x].erase(point);
 	}
-	/* === Delete triangles */
+	/* === Remove triangles generated by a point (user input point) */
 	/* ############################# Elements ############################# */
 	/* #################################################################### */
 };

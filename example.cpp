@@ -61,7 +61,7 @@ void example2 ()
 			visualiser.add_point(points[i+j]);
 		visualiser.compute();
 	}
-	// visualiser.display();
+	visualiser.display();
 
 	std::random_shuffle(&points[0], &points[n_points]);
 
@@ -70,7 +70,7 @@ void example2 ()
 			visualiser.rem_point(points[i+j]);
 		visualiser.compute();
 	}
-	// visualiser.display();
+	visualiser.display();
 
 	for(i = 0; i < n_points; ++i)
 		free(points[i]);
@@ -107,7 +107,7 @@ void example3 ()
 		visualiser.rem_point(points[i]);
 		visualiser.compute();
 	}
-	// visualiser.display();
+	visualiser.display();
 
 	for(i = 0; i < n_points; ++i)
 		free(points[i]);
@@ -118,7 +118,7 @@ void example4 ()
 {
 	int n_points, i, j;
 	double **points;
-	pfv3d visualiser(0, 0, 0);
+	pfv3d visualiser(0, 0, 0, 1);
 	FILE *f = fopen("Input/surf06.dat", "r");
 
 	fscanf(f, "%d", &n_points);
@@ -134,14 +134,10 @@ void example4 ()
 	std::random_shuffle(&points[0], &points[n_points]);
 
 	for(i = 0; i < 2000; ++i) {
-		for(j = 0; j < rand()%10; ++j)
-			visualiser.add_point(points[rand()%n_points]);
-		for(j = 0; j < rand()%10; ++j)
-			visualiser.rem_point(points[rand()%n_points]);
-		for(j = 0; j < rand()%10; ++j)
-			visualiser.add_point(points[rand()%n_points]);
-		for(j = 0; j < rand()%10; ++j)
-			visualiser.rem_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j) visualiser.add_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j) visualiser.rem_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j) visualiser.add_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j) visualiser.rem_point(points[rand()%n_points]);
 		visualiser.compute();
 	}
 	visualiser.display();
@@ -155,7 +151,7 @@ void example5 ()
 {
 	int n_points, i;
 	double **points;
-	pfv3d visualiser(0, 0, 0);
+	pfv3d visualiser(0, 0, 0, 1);
 	FILE *f = fopen("Input/surf06-500.dat", "r");
 
 	fscanf(f, "%d", &n_points);
@@ -171,8 +167,8 @@ void example5 ()
 	std::random_shuffle(&points[0], &points[n_points]);
 
 	for(i = 0; i < n_points; ++i) {
-		if(i % 1000 == 0)     visualiser.set_orientation(0, 0, 0);
-		else if(i % 500 == 0) visualiser.set_orientation(1, 1, 1);
+		     if(i % 1000 == 0) visualiser.set_orientation(0, 0, 0);
+		else if(i %  500 == 0) visualiser.set_orientation(1, 1, 1);
 		visualiser.add_point(points[i]);
 		visualiser.compute();
 	}
@@ -181,8 +177,8 @@ void example5 ()
 	std::random_shuffle(&points[0], &points[n_points]);
 
 	for(i = 0; i < n_points; ++i) {
-		if(i % 1000 == 0)     visualiser.set_orientation(0, 0, 0);
-		else if(i % 500 == 0) visualiser.set_orientation(1, 1, 1);
+		     if(i % 1000 == 0) visualiser.set_orientation(0, 0, 0);
+		else if(i %  500 == 0) visualiser.set_orientation(1, 1, 1);
 		visualiser.rem_point(points[i]);
 		visualiser.compute();
 	}
@@ -215,14 +211,10 @@ void example6 ()
 	for(i = 0; i < 2000; ++i) {
 		     if(rand()%40 == 0) visualiser.set_orientation(rand()%3, 0);
 		else if(rand()%40 == 0) visualiser.set_orientation(rand()%3, 1);
-		for(j = 0; j < rand()%10; ++j)
-			visualiser.add_point(points[rand()%n_points]);
-		for(j = 0; j < rand()%10; ++j)
-			visualiser.rem_point(points[rand()%n_points]);
-		for(j = 0; j < rand()%10; ++j)
-			visualiser.add_point(points[rand()%n_points]);
-		for(j = 0; j < rand()%10; ++j)
-			visualiser.rem_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j) visualiser.add_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j) visualiser.rem_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j) visualiser.add_point(points[rand()%n_points]);
+		for(j = 0; j < rand()%10; ++j) visualiser.rem_point(points[rand()%n_points]);
 		visualiser.compute();
 	}
 	visualiser.display();
