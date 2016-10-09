@@ -115,7 +115,7 @@ class pfv3d_display
 			out vec4 colour;\
 			void main(){\
 				/*vec3 direction = normalize(vec3(obj_rotate * vec4(0.5, 2, 3.5, 1)));*/\
-				vec3 direction = normalize(vec3(obj_rotate * vec4(1, 2, 3, 1)));\
+				vec3 direction = normalize(vec3(obj_rotate * vec4(3, 2, 1, 1)));\
 				vec3 light_position = vec3(model * vec4(7.5, 7, 8, 1));\
 				vec3 light_direction = normalize(light_position-f_position);\
 				vec3 view_direction = normalize(view_position - f_position);\
@@ -146,8 +146,10 @@ class pfv3d_display
 		   _view_position_location = glGetUniformLocation(_program, "view_position");
 		int object_colour_location = glGetUniformLocation(_program, "object_colour");
 		int  light_colour_location = glGetUniformLocation(_program, "light_colour");
+		glUniform4f(object_colour_location, 0, 0, 0, 0.75);
+		// glUniform4f(object_colour_location, 1, 1, 1, 0.75);
 		// glUniform4f(object_colour_location, 1, 0.1, 0.05, 0.75);
-		glUniform4f(object_colour_location, 0.05, 1, 0.1, 0.75);
+		// glUniform4f(object_colour_location, 0.05, 1, 0.1, 0.75);
 		// glUniform4f(object_colour_location, 0.05, 0.1, 1, 0.75);
 		// glUniform4f(object_colour_location, 1, 0.85, 0, 0.75);
 		// glUniform4f(object_colour_location, 0.75, 0.75, 0.75, 0.75);
@@ -265,7 +267,7 @@ class pfv3d_display
 	display_frontier (bool mode, bool reset)
 	{
 		int i;
-		
+
 		SDL_GL_MakeCurrent(_window, _context);
 
 		_mutex_data.lock();
@@ -273,7 +275,7 @@ class pfv3d_display
 		/* Update number of triangles */
 		for(i = 0; i < 3; ++i) _count_triangles[i] = __triangles[i].size();
 		_size_triangles = _count_triangles[0] + _count_triangles[1] + _count_triangles[2];
-		
+
 		/* If there is no triangles to display - notify the renderer and exit */
 		if(_size_triangles == 0) { _size_vertices = 0; _mutex_data.unlock(); _notify_renderer(mode); _mode = 0; return; }
 
@@ -320,7 +322,7 @@ class pfv3d_display
 		for(i = 0; i < 3; ++i) _obj_initial_look[i] = _cam_initial_look[i] = (_limits[i][0]+_limits[i][1])/2.0;
 		/* Object initial rotation */
 		_obj_initial_quat = glm::quat(1, 0, 0, 0);
-		/* Camera rotation according to optimisation order (first vertically (3), then horizontally (5)) */
+		/* Camera rotation according to optimisation order (first vertically (3 lines), then horizontally (5 lines)) */
 		glm::vec3 axis = glm::vec3(0, 1, 0);
 		float angle = __oo[2] == 0 ? -M_PI/4.0 : M_PI/4.0;
 		_cam_initial_quat = glm::quat(cosf(angle/2.0), axis * sinf(angle/2.0));
@@ -329,7 +331,7 @@ class pfv3d_display
 		if(__oo[1] == 1) angle += M_PI;
 		if(__oo[0] != __oo[1]) angle += M_PI/2.0;
 		_cam_initial_quat = glm::quat(cosf(angle/2.0), axis * sinf(angle/2.0)) * _cam_initial_quat;
-		
+
 		/* Reset scene (if required) */
 		if(_mode == 0 || reset == 1) _reset();
 
@@ -419,7 +421,7 @@ class pfv3d_display
 			   _orientation(triangle[1], triangle[2], projection) < 0 ||
 			   _orientation(triangle[2], triangle[0], projection) < 0) {
 				tmp_distance = fminf(_vertex_segment(projection, triangle[0], triangle[1]),
-					           fminf(_vertex_segment(projection, triangle[1], triangle[2]), 
+					           fminf(_vertex_segment(projection, triangle[1], triangle[2]),
 					                 _vertex_segment(projection, triangle[2], triangle[0])));
 				_distances[i] = sqrtf(_distances[i]*_distances[i] + tmp_distance*tmp_distance);
 			}
@@ -598,7 +600,7 @@ class pfv3d_display
 		_mutex_data.lock();
 
 		/* Reset display */
-		glClearColor(0, 0, 0, 1);
+		glClearColor(1, 1, 1, 1);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		/* Draw Triangles */
@@ -658,7 +660,7 @@ class pfv3d_display
 						_cam_rotate = glm::mat4_cast(_cam_quat);
 						_update_view_rt();
 						_blend_sort();
-					} 
+					}
 					/* Alt + Mouse left-click - rotate object */
 					else if (_key_alt == 1) {
 						float distance = glm::length(glm::vec2(motion->xrel, motion->yrel));
@@ -702,7 +704,7 @@ class pfv3d_display
 				break;
 
 			case SDL_MOUSEBUTTONDOWN:
-				     if(button->button == SDL_BUTTON_LEFT)   _left_button = 1; 
+				     if(button->button == SDL_BUTTON_LEFT)   _left_button = 1;
 				else if(button->button == SDL_BUTTON_RIGHT) _right_button = 1;
 				_mouse_x = button->x; _mouse_y = button->y;
 				break;

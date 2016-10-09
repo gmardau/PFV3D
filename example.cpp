@@ -31,7 +31,7 @@ void example1 ()
 
 	visualiser.add_points(n_points, points);
 	visualiser.compute();
-	visualiser.display();
+	// visualiser.display();
 	visualiser.export_file("output");
 
 	free(points);

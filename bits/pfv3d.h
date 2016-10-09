@@ -268,8 +268,9 @@ class pfv3d
 		fprintf(f, "%lu %lu\n", _all_points.size() + _all_vertices.size(),
 			                    _triangles[0].size()+_triangles[1].size()+_triangles[2].size());
 		int i = -1;
-		for(_C_USet_P::const_iterator it =   _all_points.cbegin(); it !=   _all_points.cend(); ++it) {
-			fprintf(f, "%.15lf %.15lf %.15lf\n", (*it)->_x[0], (*it)->_x[1], (*it)->_x[2]); (*it)->_aid = ++i; }
+		for(_C_USet_P::const_iterator it =   _all_points.cbegin(); it !=   _all_points.cend(); ++it)
+			if((*it)->_optimal == 1) {
+				fprintf(f, "%.15lf %.15lf %.15lf\n", (*it)->_x[0], (*it)->_x[1], (*it)->_x[2]); (*it)->_aid = ++i; }
 		for(_C_USet_P::const_iterator it = _all_vertices.cbegin(); it != _all_vertices.cend(); ++it) {
 			fprintf(f, "%.15lf %.15lf %.15lf\n", (*it)->_x[0], (*it)->_x[1], (*it)->_x[2]); (*it)->_aid = ++i; }
 		for(i = 0; i < 3; ++i)
@@ -543,10 +544,10 @@ class pfv3d
 		/* Perform the sweep */
 		bool redo, save_break = 0;
 		int to_add = _add[X0].size(), to_rem = _rem[X0].size(), add_in = 0, rem_in = 0;
-		Point *point, *saved = nullptr;
+		Point *point, *saved[2] = {nullptr, nullptr};
 		_Tree_P::iterator it = _points[X0].begin(), it_add = _add[X0].begin(), it_rem = _rem[X0].begin();
 
-		for( ; !it.is_sentinel() && (add_in || rem_in || to_add || to_rem || saved || save_break); ++it) {	
+		for( ; !it.is_sentinel() && (add_in || rem_in || to_add || to_rem || saved[0] || save_break); ++it) {	
 			point = *it;
 
 			/* If point is marked for removal - only insert it in the projection tree */
@@ -560,7 +561,7 @@ class pfv3d
 			/* If it has the same sweep coordinate than the next to be removed - (re)compute its triangles */
 			else if(to_rem > 0 && point->_x[X0] == (*it_rem)->_x[X0]) redo = 1;
 			/* If the case of equal sweep coordinates (X0) has occured - (re)compute its triangles */
-			else if(saved != nullptr) redo = 1;
+			else if(saved[0] != nullptr) redo = 1;
 			/* If the case where the equal sweep coordinates case (X0) has been broken - (re)compute its triangles */
 			else if(save_break == 1) { save_break = 0; redo = 1; }
 			/* Otherwise - only insert it in the projection tree */
@@ -626,7 +627,7 @@ class pfv3d
 	private:
 	template <int X0, int X1, int X2>
 	bool
-	_facet (_Tree_P::iterator &p, Point *&saved, int &add_in, int &rem_in, bool &save_break)
+	_facet (_Tree_P::iterator &p, Point *saved[2], int &add_in, int &rem_in, bool &save_break)
 	{
 		Point *point = *p;
 
@@ -643,24 +644,31 @@ class pfv3d
 		else if(point->_state == 1) ++add_in;
 
 		/* Get the intersected point in the projection tree */
-		_Tree_P::iterator current = p_it.next();
-		/* Find the successor (it must not be marked for removal) */
-		for( ; (*current)->_x[X1] == point->_x[X1] && (*current)->_state == -1; current = p_it.next()) {
-			/* Successor is partially dominated and is marked for removal - remove it from the projection tree
-			   and update their number in the projection tree */
-			_projection[X0].erase(current); --rem_in; }
-		/* If successor does not have an equal X1 coordinate - intersected point is the predecessor obtained earlier */
-		if((*current)->_x[X1] != point->_x[X1]) current = tmp_it;
-
-		/* Create vertex 1 */
 		Point *vertices[3];
-		vertices[0] = _add_vertex<X0, X1, X2>(point->_x[X0], point->_x[X1], (*current)->_x[X2]);
+		_Tree_P::iterator current = p_it.next();
+		/* If the previous point called into this function has the same sweep coordinate (X0) as the
+		   current one - recover saved vertex 1 (was vertex 3 before) */
+		if(saved[0] != nullptr) vertices[0] = saved[0];
+		/* If does not - find and create vertex 1 */
+		else {
+			/* Find the successor (it must not be marked for removal) */
+			for( ; (*current)->_x[X1] == point->_x[X1] && (*current)->_state == -1; current = p_it.next()) {
+				/* Successor is partially dominated and is marked for removal - remove it from the projection tree
+				   and update their number in the projection tree */
+				_projection[X0].erase(current); --rem_in; }
+			/* If successor does not have an equal X1 coordinate - intersected point
+			   is the predecessor obtained earlier */
+			if((*current)->_x[X1] != point->_x[X1]) current = tmp_it;
 
-		/* If intersected point is partially dominated - remove it from the representation tree */
-		if(current != tmp_it) { // if((*current)->_x[X1] == point->_x[X1]) {
-			/* If it was a point marked for addition - update their number in the projection tree */
-			if((*current)->_state == 1) --add_in;
-			_projection[X0].erase(current);
+			/* Create vertex 1 */
+			vertices[0] = _add_vertex<X0, X1, X2>(point->_x[X0], point->_x[X1], (*current)->_x[X2]);
+
+			/* If intersected point is partially dominated - remove it from the representation tree */
+			if(current != tmp_it) { // if((*current)->_x[X1] == point->_x[X1]) {
+				/* If it was a point marked for addition - update their number in the projection tree */
+				if((*current)->_state == 1) --add_in;
+				_projection[X0].erase(current);
+			}
 		}
 
 		/* Cycle to process points until one that is intercected is reached */
@@ -675,12 +683,12 @@ class pfv3d
 			}
 
 			/* If the previous point called into this function has the same sweep coordinate (X0) as the
-			   current one - recover saved vertex 2 */
-			if(saved != nullptr) vertices[1] = saved;
+			   current one - recover saved vertex 2 (was vertex 2 before) */
+			if(saved[0] != nullptr) vertices[1] = saved[1];
 			/* If does not - create vertex 2 */
 			else vertices[1] = _add_vertex<X0, X1, X2>(point->_x[X0], (*current)->_x[X1], vertices[0]->_x[X2]);
 
-			/* If current point is not fully dominated - leave cycle */
+			/* If current point is not fully dominated by the point called into this function - leave cycle */
 			if(!(_of[X2](point->_x[X2], (*current)->_x[X2]))) break;
 
 			/* Create vertex 3 */
@@ -691,7 +699,7 @@ class pfv3d
 			_add_triangle(X0, *p_it, vertices[0], vertices[1], vertices[2]);
 
 			/* There is no case of equal sweep coordinates (X0) (possible only after cycle, ending of this function) */
-			saved = nullptr;
+			saved[0] = nullptr;
 
 			/* - Remove current point from the projection tree (it is fully dominated) - */
 			/* If it was a point marked for addition - update their number in the projection tree */
@@ -712,22 +720,22 @@ class pfv3d
 		   && _of[X1]((*tmp2_it)->_x[X1], (*current)->_x[X1])) {
 			/* Create vertex 3 */
 			vertices[2] = _add_vertex<X0, X1, X2>(point->_x[X0], (*tmp2_it)->_x[X1], point->_x[X2]);
-			/* Save vertex 2 for next function */
-			saved = vertices[1];
+			/* Save vertices 2 and 3 for next function (vertex 3 will be 1 and vertex 2 will still be 2) */
+			saved[0] = vertices[2]; saved[1] = vertices[1];
 		}
 		/* The case of qual sweep coordinates (X0) does not occur (default case) */
 		else {
 			/* Create vertex 3 */
 			vertices[2] = _add_vertex<X0, X1, X2>(point->_x[X0], (*current)->_x[X1], point->_x[X2]);
 			/* There is no case of equal sweep coordinates (X0) */
-			saved = nullptr;	
+			saved[0] = nullptr;	
 			/* If intersected point is partially dominated - remove it from the representation tree */
 			if((*current)->_x[X2] == point->_x[X2]) {
 				/* If intersected point was marked for addition and breaks the case of equal sweep coordinates (X0) */
 				if((*current)->_state == 1 && !tmp2_it.is_sentinel() && point->_x[X0] == (*tmp2_it)->_x[X0]
 				   && _of[X2]((*tmp2_it)->_x[X2], point->_x[X2]) && (*tmp2_it)->_state == 0) save_break = 1;
 
-				/* If it was a point marked for addition - update their number i\n the projection tree */
+				/* If it was a point marked for addition - update their number in the projection tree */
 				if((*current)->_state == 1) --add_in;
 				_projection[X0].erase(current);
 			}

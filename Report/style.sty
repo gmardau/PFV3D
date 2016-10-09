@@ -1,0 +1,71 @@
+%%%%% Margins %%%%%
+\usepackage[margin=1.5cm]{geometry}
+\geometry{a4paper,bottom=80pt}
+%%%%% Margins %%%%%
+
+\usepackage{pdflscape}
+
+%%%%% Fonts %%%%%
+\usepackage[utf8]{inputenc}
+%\usepackage{epigrafica}
+%\usepackage[LGR,OT1]{fontenc}
+\usepackage{fourier}
+%\usepackage{mathptmx}
+\renewcommand*\sfdefault{qhv}
+%%%%% Fonts %%%%%
+
+%%%%% Mathematics %%%%%
+\usepackage{amsmath}
+\DeclareMathAlphabet{\mathcal}{OMS}{cmr}{m}{n}
+%%%%% Mathematics %%%%%
+
+%%%%% Figures %%%%%
+%\usepackage{graphicx}
+\usepackage[font={small,sf},labelfont={normalsize,rm,bf,sc},labelsep=period,justification=centering]{caption}
+\usepackage[font={footnotesize,sf},labelfont={small,rm,bf,sc},skip=2pt]{subcaption}
+\usepackage{subcaption}
+%\renewcommand{\thesubfigure}{\textsc{\alph{subfigure}}}
+%\renewcommand{\figurename}{\textsc{\textbf{Figure}}}
+%%%%% Figures %%%%%
+
+%%%%% Tables %%%%%
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{array}
+\renewcommand{\tablename}{\textsc{Table}}
+\newcolumntype{x}[1]{>{\centering\hspace{0pt}}p{#1}}
+\newcolumntype{?}{!{\vrule width 3pt}}
+\setlength{\heavyrulewidth}{3pt}
+\setlength{\lightrulewidth}{1.5pt}
+%\setlength{\belowrulesep}{0pt}
+%%%%% Tables %%%%%
+
+\usepackage[dvipsnames]{xcolor}
+%\selectcolormodel{gray}
+
+%%%%% Tikz %%%%%
+\usepackage{tikz}
+\usetikzlibrary{patterns}
+\usepackage{gnuplot-lua-tikz}
+\usepackage{circuitikz}
+\usepackage{pgfplots}
+\usepackage{sansmath}
+\usetikzlibrary{shapes,positioning,arrows,decorations}
+%\usetikzlibrary{arrows.meta}
+%\usetikzlibrary{decorations.pathreplacing}
+\pgfdeclaredecoration{sl}{initial}{
+	\state{initial}[width=\pgfdecoratedpathlength-1sp]{\pgfmoveto{\pgfpointorigin}}
+	\state{final}{\pgflineto{\pgfpointorigin}}
+}
+\pgfplotsset{every non boxed x axis/.append style={x axis line style=-}}
+\pgfplotsset{
+	tick label style = {font=\sansmath\sffamily\footnotesize},
+	every axis label = {font=\sffamily},
+	legend style = {font=\small\sffamily},
+	label style = {font=\sffamily}
+}
+%%%%% Tikz %%%%%
+
+%%%%% References %%%%%
+\bibliographystyle{abbrv}
+%%%%% References %%%%%

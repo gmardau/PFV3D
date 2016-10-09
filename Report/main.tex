@@ -1,0 +1,26 @@
+\documentclass[10pt, twoside]{article}
+
+\usepackage{style}
+
+\title{\textbf{\huge Incremental Computation and Visualisation\\of Three-Dimensional Pareto Frontiers}}
+\author{Gustavo Martins\\\normalsize \textit{University of Coimbra, Portugal}}
+\date{October, 2016}
+
+\begin{document}
+	
+\maketitle
+
+\begin{abstract}
+Multi-objective optimisation has been extensively studied and used for a long time, having practical applications in almost every field there is, from Economics and Finance to Logistics and Engineering, among many others. As such, many methods, techniques and algorithms have been developed over the years in order to solve the most diverse problems, such as resource management, network and systems design, or ..., to name a few. However, there is a lack of tools that allow a graphical visualisation of the solutions produced by these methods, especially for problems with three or more objectives. In this work, a method to compute the facets of a three-dimensional Pareto frontier, which is based on a well-known algorithm for finding the optimal solutions of a set, is proposed. Additionally, an incremental approach to the frontier computation, allowing for a reasonably fast update of the frontier, is presented. Further applications for this method are also explored.\\
+
+\noindent\textbf{Keywords:} Computational Geometry; Multi-Objective Optimisation; Pareto Frontier; Data Visualisation.
+\end{abstract}
+
+\input{introduction}
+\input{optimal}
+\input{frontier}
+\input{incremental}
+\input{conclusion}
+\bibliography{references}
+
+\end{document}
