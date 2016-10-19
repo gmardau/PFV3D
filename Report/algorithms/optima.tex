@@ -1,0 +1,28 @@
+\begin{algorithm}[h]
+	\begin{algorithmic}[0]
+		\Statex
+		\State\textbf{\hspace{-7pt}Input:} $S_i$ - set of solutions in $\mathbb{R}^d$; $d$ - number of dimensions (objectives)
+		\State\textbf{\hspace{-7pt}Output:} $S_o$ - set of optimal solutions of $S_i$
+	\end{algorithmic}
+	\begin{algorithmic}[1]
+		\vspace{3pt}
+		\Function{optima}{$S_i$, $d$}
+		\State $Q \leftarrow$ \Call{sort}{$S_i$, $d$} \Comment{Queue containing $S$ sorted by coordinate $d$}
+		\State $S_o \leftarrow \emptyset$
+		\State $S^\ast \leftarrow \emptyset$ \Comment{Set of optimal solutions, of dimension $d-1$}
+		\While{$Q \neq \emptyset$}
+		\State $s \leftarrow$ $Q$.\Call{pop}{\null} \Comment{Extract element from the queue}
+		\State $s^\ast \leftarrow$ \Call{project}{$s$, $d-1$} \Comment{Projection of $s$ onto the first $d-1$ dimensions}
+		\If{$s^\ast \nprec S^\ast$}
+		\State $S_o \leftarrow S_o \cup \{s\}$
+		\State $S^\ast \leftarrow$ \Call{optima}{$S^\ast \cup \{s^\ast\}$, $d-1$}
+		\EndIf
+		\EndWhile
+		\State \Return $S_o$
+		\EndFunction
+	\end{algorithmic}
+	\caption{Optimal solution set \cite{kung_optima, preparata_comp_geom, fonseca_eaf}}
+	\label{alg:optima}
+	\algrule[1pt]
+	\small When $d$ reaches the value 1, there is no need to perform lines 3--10. As replacement, the following suffices: $S_o \leftarrow \{Q.\textsc{pop}(\null)\}$.
+\end{algorithm}

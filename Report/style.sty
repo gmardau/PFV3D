@@ -4,26 +4,33 @@
 %%%%% Margins %%%%%
 
 \usepackage{pdflscape}
+\linespread{1}
+\newcommand{\raisedrule}[1][0em]{\ \leaders\hbox{\textcolor{lightgray!50}{\ \rule[.275em]{1pt}{0.75pt}}}}
+
+%%%%% Theorems %%%%%
+\usepackage{amsthm}
+\newtheoremstyle{newstyle}{}{}{}{}{\bfseries}{}{10pt}{\thmname{#1} \thmnumber{#2}: \thmnote{#3}}
+\theoremstyle{newstyle}
+\newtheorem{defn}{\textsc{Definition}}
+%%%%% Theorems %%%%%
 
 %%%%% Fonts %%%%%
 \usepackage[utf8]{inputenc}
-%\usepackage{epigrafica}
-%\usepackage[LGR,OT1]{fontenc}
-\usepackage{fourier}
-%\usepackage{mathptmx}
 \renewcommand*\sfdefault{qhv}
+\usepackage{fourier}
 %%%%% Fonts %%%%%
 
 %%%%% Mathematics %%%%%
 \usepackage{amsmath}
+\usepackage{amssymb}
 \DeclareMathAlphabet{\mathcal}{OMS}{cmr}{m}{n}
 %%%%% Mathematics %%%%%
 
 %%%%% Figures %%%%%
 %\usepackage{graphicx}
-\usepackage[font={small,sf},labelfont={normalsize,rm,bf,sc},labelsep=period,justification=centering]{caption}
+\usepackage[font={small,sf},labelfont={normalsize,rm,bf,sc},labelsep=colon,justification=centering]{caption}
 \usepackage[font={footnotesize,sf},labelfont={small,rm,bf,sc},skip=2pt]{subcaption}
-\usepackage{subcaption}
+%\usepackage{subcaption}
 %\renewcommand{\thesubfigure}{\textsc{\alph{subfigure}}}
 %\renewcommand{\figurename}{\textsc{\textbf{Figure}}}
 %%%%% Figures %%%%%
@@ -66,6 +73,16 @@
 }
 %%%%% Tikz %%%%%
 
+%%%%% Algorithms %%%%%
+\usepackage[ruled]{algorithm}
+\usepackage[noend]{algpseudocode}
+\renewcommand{\ALG@name}{\textsc{Algorithm}}
+\captionsetup[algorithm]{labelsep=period}
+\newcommand{\algrule}[1][.2pt]{\par\vskip.15\baselineskip\hrule height #1\par\vskip.5\baselineskip}
+%%%%% Algorithms %%%%%
+
 %%%%% References %%%%%
 \bibliographystyle{abbrv}
 %%%%% References %%%%%
+
+\usepackage[color=lightgray]{todonotes}

@@ -1,3 +1,37 @@
 \section{Introduction}
 
-assumir o resto do relatorio como minimização nas 3 dimensões
+\paragraph{Optimal solutions} Multi-objective optimisation is an area of decision making where two or more objective functions --- usually conflicting --- are evaluated and optimised simultaneously, and which purpose is to either minimise or maximise each of the objectives. If these happen to be of conflicting nature, usually there is no single solution that optimises all the objective functions at once. Instead, the result of such optimisation is a set of \textit{optimal solutions}, i.e.\ solutions that cannot be improved on one objective (dimension) without deteriorating at least one of the others. These optimal solutions are also known as \textit{non-dominated solutions}, which, as the name might suggest, are solutions that are not dominated by any other, i.e.\ there is no other solution that is equally-good or better on all objectives.
+
+\begin{defn}[Dominance \cite{preparata_comp_geom}]
+Considering minimisation on all $d$ dimensions, a solution $a$ is said to \textit{dominate} solution $b$ (denoted by $a \succ b$) if
+\begin{align*}
+\forall i: a_i \leq b_i \land \exists i: a_i < b_i, i \in \{1,\dotsc,d\}
+\end{align*}
+Likewise, a solution $c$ is said to be \textit{dominated} by a set $S$ when
+\begin{align*}
+\exists s \in S: c \prec s
+\end{align*}
+\end{defn}
+
+\paragraph{Pareto frontier} The set of optimal solutions, also called \textit{Pareto set}, use of the frontier, algorithms to compute the frontier (kung)
+
+\begin{defn} [Optima \cite{fonseca_eaf}]
+Given a set of solutions $S = \{s_1,\dotsc,s_m \in \mathbb{R}^d\}$, the \textit{set of optimal solutions} of $S$ is
+\begin{align*}
+%\mathsf{optima\ } S = \{s \in S, \forall r \in S: r \preceq s \Rightarrow r = s\}
+\mathsf{optima}\ S = \{s \in S: \nexists r \in S, r \succ s\}
+\end{align*}
+\end{defn}
+
+\begin{defn} [Optimal solution set \cite{fonseca_eaf}]
+A set of solutions $S$ such that $\mathsf{optima\ } S = S$ is called a \textit{optimal/non-dominated solution set}.
+\end{defn}
+
+\paragraph{Visualisation} visualisation can help the user understand how the objectives interact with each other, and make the best decision to which solution to choose. how improving one objective is related to deteriorating the others. talk about the trade-off curve.  For a two-dimensional space there are several tools that provide a good visualisation
+\ \todo[inline]{TODO: Slightly describe the EAF and the AFT as further applications \cite{fonseca_eaf, ibanez_eaf}}\ 
+
+\input{figures/frontier_example_2d}
+
+\paragraph{Note} Throughout the rest of the document, the solutions will be referred to in terms of optimality and dominance, whenever possible. In case it is not possible, e.g.\ when comparing the values of the solutions, please assume minimisation on all three dimensions.
+
+\paragraph{Document structure} This document is organised as follows. Section 2 presents in detail a well-known method to find the optimal solutions on a three-dimensional space. The method serves as a structural frame for the computation of the facets of the Pareto frontier, proposed in Section 3. Section 4 describes an incremental approach to the frontier computation, allowing the frontier to be updated when necessary --- both insertion and removal --- or even to be constructed one solution at a time, which could be used alongside the optimisation process to display the frontier in real-time.

@@ -1,3 +1,32 @@
-\begin{thebibliography}{}
+\begin{thebibliography}{1}
+
+\bibitem{fonseca_eaf}
+C.~M. Fonseca, A.~P. Guerreiro, M.~L{\'o}pez-Ib{\'a}{\~n}ez, and L.~Paquete.
+\newblock On the computation of the empirical attainment function.
+\newblock In {\em International Conference on Evolutionary Multi-Criterion
+  Optimization}, pages 106--120. Springer, 2011.
+
+\bibitem{kung_optima}
+H.-T. Kung, F.~Luccio, and F.~P. Preparata.
+\newblock On finding the maxima of a set of vectors.
+\newblock {\em Journal of the ACM (JACM)}, 22(4):469--476, 1975.
+
+\bibitem{ibanez_eaf}
+M.~L{\'o}pez-Ib{\'a}nez, L.~Paquete, and T.~St{\"u}tzle.
+\newblock Exploratory analysis of stochastic local search algorithms in
+  biobjective optimization.
+\newblock In {\em Experimental methods for the analysis of optimization
+  algorithms}, pages 209--222. Springer, 2010.
+
+\bibitem{preparata_comp_geom}
+F.~P. Preparata and M.~Shamos.
+\newblock {\em Computational geometry: An Introduction}.
+\newblock Springer Science \& Business Media, 1985.
+
+\bibitem{teschner_hash}
+M.~Teschner, B.~Heidelberger, M.~M{\"u}ller, D.~Pomerantes, and M.~H. Gross.
+\newblock Optimized spatial hashing for collision detection of deformable
+  objects.
+\newblock In {\em VMV}, volume~3, pages 47--54, 2003.
 
 \end{thebibliography}

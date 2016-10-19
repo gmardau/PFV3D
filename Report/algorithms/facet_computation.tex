@@ -1,0 +1,61 @@
+\begin{algorithm}[h]
+	\begin{algorithmic}[0]
+		\Statex
+		\State\textbf{\hspace{-7pt}Global space:} $P$ - projection tree; $V$ - vertices; $T$ - triangles
+		\State\textbf{\hspace{-7pt}Input:} $p$ - point to be evaluated; $q$ - next point to be evaluated; $S$ - saved vertices
+		\State\textbf{\hspace{-7pt}Output:} none
+	\end{algorithmic}
+	\begin{algorithmic}[1]
+		\vspace{3pt}
+		\Function{facet}{$p$, $q$, $S$}
+		\State $P.$\Call{insert}{$p$} \raisedrule\Comment{Insert $p$ in the projection tree}
+		\State $c \leftarrow P.$\Call{pred}{$p$} \raisedrule\Comment{Get $p$'s predecessor in the projection tree}
+		\If{$c_3 \leq p_3$} \raisedrule\Comment{If $p$ is not optimal}
+		\State $P.$\Call{remove}{$p$} \raisedrule\Comment{Remove $p$ from the tree}
+		\State \Return \raisedrule\Comment{Exit function}
+		\EndIf
+		
+		\If{$S \neq \emptyset$} \Comment{If vertices were saved from the previous facet (special case)}
+		\State $v1 \leftarrow S_1$ \Comment{Recover vertex $v1$ (was saved as $v3$)}
+		\Else \Comment{General case}
+		\If{$P.$\Call{succ}{$p$}$_2 = p_2$} \Comment{If $p$'s successor is partially dominated by $p$}
+		\State $c \leftarrow P.$\Call{succ}{$p$} \Comment{Edge intersects the successor and not the predecessor}
+		\State $P.$\Call{remove}{$c$} \Comment{Remove $p$'s successor from the tree}
+		\EndIf
+		\State $v1 \leftarrow V.$\Call{create}{$p_1$, $p_2$, $c_3$} \Comment{Define vertex $v1$}
+		\EndIf
+		\Loop \Comment{Iterate through $p$'s successors}
+		\State $c \leftarrow P.$\Call{succ}{$p$} \Comment{Get $p$'s successor in the projection tree}
+		\If{$S \neq \emptyset$} \Comment{If vertices were saved from the previous facet (special case)}
+		\State $v2 \leftarrow S_2$ \Comment{Recover vertex $v2$ (was $v2$ before)}
+		\State $S \leftarrow \emptyset$ \Comment{Clear saved vertices from special case}
+		\Else \Comment{General case}
+		\State $v2 \leftarrow V.$\Call{create}{$p_1$, $c_2$, $v1_3$} \Comment{Define vertex $v2$}
+		\EndIf
+		\If{$c_3 \leq p_3$} \Comment{If $p$'s successor is not fully dominated by $p$}
+		\State \textbf{break} \Comment{Break cycle (edge intersection)}
+		\EndIf
+		\State $v3 \leftarrow V.$\Call{create}{$p_1$, $c_2$, $c_3$} \Comment{Define vertex $v3$}
+		\State $T.$\Call{create}{$v1$, $p$, $v3$} \Comment{Create triangle [$v1$-$p$-$v3$]}
+		\State $T.$\Call{create}{$v1$, $v2$, $v3$} \Comment{Create triangle [$v1$-$v2$-$v3$]}
+		\State $P.$\Call{remove}{$c$} \Comment{Remove $p$'s successor from the tree (it is fully dominated)}
+		\State $v1 \leftarrow v3$ \Comment{Vertex $v3$ will be the new vertex $v1$}
+		\EndLoop
+		\If{$q \neq \emptyset$ \textbf{and} $q_1 = p_1$ \textbf{and} $q_2 < c_2$ \textbf{and} $q_3 < p_3$} \Comment{Special case ($p$ and $q$ intersect in non-dominated space)}
+		\State $v3 \leftarrow V.$\Call{create}{$p_1$, $q_2$, $p_3$} \Comment{Define vertex $v3$ (intersection of $p$ and $q$)}
+		\State $S \leftarrow \{v3, v2\}$ \Comment{Save vertices $v3$ and $v2$ (will be $v1$ and $v2$, respectively)}
+		\Else \Comment{General case}
+		\State $v3 \leftarrow V.$\Call{create}{$p_1$, $c_2$, $p_3$} \Comment{Define vertex $v3$}
+		\If{$p_3 = c_3$} \Comment{If $p$'s successor is partially dominated by $p$}
+		\State $P.$\Call{remove}{$c$} \Comment{Remove $p$'s successor from the tree}
+		\EndIf
+		\EndIf
+		\State $T.$\Call{create}{$v1$, $p$, $v3$} \Comment{Create triangle [$v1$-$p$-$v3$]}
+		\State $T.$\Call{create}{$v1$, $v2$, $v3$} \Comment{Create triangle [$v1$-$v2$-$v3$]}
+		\EndFunction
+	\end{algorithmic}
+	\caption{Facet computation}
+	\label{alg:facet_computation}
+	\algrule[1pt]
+	\small The projection tree sorts its elements by the following order: $x_2,x_3,x_1$.\\Function $P$.\textsc{insert}($a$) inserts point $a$ into the projection tree ($P$) and function $P$.\textsc{remove}($a$) removes point $a$ from the tree.\\Function $P$.\textsc{pred}($a$) returns the predecessor of $a$ in the tree, and function $P$.\textsc{succ}($a$) returns the successor of $a$ in the tree.\\Function $V$.\textsc{create}($a,b,c$) creates a vertex with the coordinate values of $a$, $b$ and $c$. In the case there is an existing vertex with the same values, the function returns its reference instead. One can efficiently achieve this by using a hash table. The hash function is defined as \textsc{hash}$(a,b,c) = a.p_1$ \textbf{xor} $b.p_2$ \textbf{xor} $c.p_3$, where $p_1$, $p_2$ and $p_3$ are large prime numbers: 73856093, 19349663, 83492791, respectively \cite{teschner_hash}.\\Function $T$.\textsc{create}($a,b,c$) creates a triangle formed by the vertices $a$, $b$ and $c$.
+\end{algorithm}

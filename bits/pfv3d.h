@@ -25,6 +25,8 @@
 #include <SDL2/SDL_opengl.h>
 #include <X11/Xlib.h>
 
+#include "../../../Libraries/CppTreeLib/bits/tree.h"
+
 /* === Visualiser blend stuff === */
 float *_distances = nullptr;
 int _blend_compare (int *a, int *b)
@@ -659,16 +661,15 @@ class pfv3d
 			/* If successor does not have an equal X1 coordinate - intersected point
 			   is the predecessor obtained earlier */
 			if((*current)->_x[X1] != point->_x[X1]) current = tmp_it;
-
-			/* Create vertex 1 */
-			vertices[0] = _add_vertex<X0, X1, X2>(point->_x[X0], point->_x[X1], (*current)->_x[X2]);
-
 			/* If intersected point is partially dominated - remove it from the representation tree */
-			if(current != tmp_it) { // if((*current)->_x[X1] == point->_x[X1]) {
+			else {
 				/* If it was a point marked for addition - update their number in the projection tree */
 				if((*current)->_state == 1) --add_in;
 				_projection[X0].erase(current);
 			}
+
+			/* Create vertex 1 */
+			vertices[0] = _add_vertex<X0, X1, X2>(point->_x[X0], point->_x[X1], (*current)->_x[X2]);
 		}
 
 		/* Cycle to process points until one that is intercected is reached */
@@ -684,7 +685,7 @@ class pfv3d
 
 			/* If the previous point called into this function has the same sweep coordinate (X0) as the
 			   current one - recover saved vertex 2 (was vertex 2 before) */
-			if(saved[0] != nullptr) vertices[1] = saved[1];
+			if(saved[0] != nullptr) { vertices[1] = saved[1]; saved[0] = nullptr; }
 			/* If does not - create vertex 2 */
 			else vertices[1] = _add_vertex<X0, X1, X2>(point->_x[X0], (*current)->_x[X1], vertices[0]->_x[X2]);
 
@@ -698,9 +699,6 @@ class pfv3d
 			_add_triangle(X0, *p_it, vertices[0], *p_it, vertices[2]);
 			_add_triangle(X0, *p_it, vertices[0], vertices[1], vertices[2]);
 
-			/* There is no case of equal sweep coordinates (X0) (possible only after cycle, ending of this function) */
-			saved[0] = nullptr;
-
 			/* - Remove current point from the projection tree (it is fully dominated) - */
 			/* If it was a point marked for addition - update their number in the projection tree */
 			if((*current)->_state == 1) --add_in;
@@ -711,15 +709,15 @@ class pfv3d
 		}
 
 		/* Find the next point to be called into this function (must not be marked for removal) */
-		_Tree_P::iterator tmp2_it = p.next();
-		for( ; !tmp2_it.is_sentinel() && (*tmp2_it)->_state == -1; tmp2_it = tmp2_it.next()) {}
+		tmp_it = p.next();
+		for( ; !tmp_it.is_sentinel() && (*tmp_it)->_state == -1; tmp_it = tmp_it.next()) {}
 		/* If it has an equal sweep coordinate (X0) as the point called into this function, it is not dominated by the
-		   latter, and it intersects the latter in non dominated space - the case of equal sweep coordinates occurs */
-		if(!tmp2_it.is_sentinel() && point->_x[X0] == (*tmp2_it)->_x[X0]
-		   && _of[X2]((*tmp2_it)->_x[X2], point->_x[X2])
-		   && _of[X1]((*tmp2_it)->_x[X1], (*current)->_x[X1])) {
+		   latter, and it intersects the latter in non-dominated space - the case of equal sweep coordinates occurs */
+		if(!tmp_it.is_sentinel() && point->_x[X0] == (*tmp_it)->_x[X0]
+		   && _of[X2]((*tmp_it)->_x[X2], point->_x[X2])
+		   && _of[X1]((*tmp_it)->_x[X1], (*current)->_x[X1])) {
 			/* Create vertex 3 */
-			vertices[2] = _add_vertex<X0, X1, X2>(point->_x[X0], (*tmp2_it)->_x[X1], point->_x[X2]);
+			vertices[2] = _add_vertex<X0, X1, X2>(point->_x[X0], (*tmp_it)->_x[X1], point->_x[X2]);
 			/* Save vertices 2 and 3 for next function (vertex 3 will be 1 and vertex 2 will still be 2) */
 			saved[0] = vertices[2]; saved[1] = vertices[1];
 		}
@@ -727,13 +725,11 @@ class pfv3d
 		else {
 			/* Create vertex 3 */
 			vertices[2] = _add_vertex<X0, X1, X2>(point->_x[X0], (*current)->_x[X1], point->_x[X2]);
-			/* There is no case of equal sweep coordinates (X0) */
-			saved[0] = nullptr;	
 			/* If intersected point is partially dominated - remove it from the representation tree */
 			if((*current)->_x[X2] == point->_x[X2]) {
 				/* If intersected point was marked for addition and breaks the case of equal sweep coordinates (X0) */
-				if((*current)->_state == 1 && !tmp2_it.is_sentinel() && point->_x[X0] == (*tmp2_it)->_x[X0]
-				   && _of[X2]((*tmp2_it)->_x[X2], point->_x[X2]) && (*tmp2_it)->_state == 0) save_break = 1;
+				if((*current)->_state == 1 && !tmp_it.is_sentinel() && point->_x[X0] == (*tmp_it)->_x[X0]
+				   && _of[X2]((*tmp_it)->_x[X2], point->_x[X2]) && (*tmp_it)->_state == 0) save_break = 1;
 
 				/* If it was a point marked for addition - update their number in the projection tree */
 				if((*current)->_state == 1) --add_in;
