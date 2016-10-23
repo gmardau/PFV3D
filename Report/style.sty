@@ -3,9 +3,11 @@
 \geometry{a4paper,bottom=80pt}
 %%%%% Margins %%%%%
 
+\usepackage{enumitem}
+\setitemize{itemsep=-2pt,topsep=5pt}
 \usepackage{pdflscape}
 \linespread{1}
-\newcommand{\raisedrule}[1][0em]{\ \leaders\hbox{\textcolor{lightgray!50}{\ \rule[.275em]{1pt}{0.75pt}}}}
+\newcommand{\raisedrule}[1][0em]{\ \leaders\hbox{\textcolor{gray}{$\cdot$\ }}}
 
 %%%%% Theorems %%%%%
 \usepackage{amsthm}
@@ -77,7 +79,7 @@
 \usepackage[ruled]{algorithm}
 \usepackage[noend]{algpseudocode}
 \renewcommand{\ALG@name}{\textsc{Algorithm}}
-\captionsetup[algorithm]{labelsep=period}
+\captionsetup[algorithm]{labelsep=colon}
 \newcommand{\algrule}[1][.2pt]{\par\vskip.15\baselineskip\hrule height #1\par\vskip.5\baselineskip}
 %%%%% Algorithms %%%%%
 

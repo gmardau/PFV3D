@@ -32,7 +32,7 @@ void example1 ()
 	visualiser.add_points(n_points, points);
 	visualiser.compute();
 	visualiser.display();
-	visualiser.export_file("output");
+	// visualiser.export_file("output");
 
 	free(points);
 }
@@ -56,7 +56,7 @@ void example2 ()
 
 	std::random_shuffle(&points[0], &points[n_points]);
 
-	for(i = 0; i < n_points; i+=154) {
+	for(i = 0; i < n_points; i += 154) {
 		for(j = 0; j < 154; ++j)
 			visualiser.add_point(points[i+j]);
 		visualiser.compute();

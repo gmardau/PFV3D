@@ -1,6 +1,6 @@
-\newpage\begin{figure}[!h]
+\begin{figure}[!h]
 \begin{center}
-\begin{subfigure}[b]{0.375\textwidth}
+\begin{subfigure}[b]{0.4\textwidth}
 \begin{tikzpicture}[
 scale=1.25,
 axis/.style={->,>=stealth',ultra thick,black,shorten <=-6pt},
@@ -46,9 +46,8 @@ edg3/.style={black,thick,dotted}]
 \draw[edg2] (p0) -- (v2) -- (p1);
 \draw[edg3] (p0) -- (p3) -- (v2) -- (v1);
 \end{tikzpicture}
-\caption{}
 \end{subfigure}
-\begin{subfigure}[b]{0.375\textwidth}
+\begin{subfigure}[b]{0.4\textwidth}
 \begin{tikzpicture}[
 scale=1.25,
 axis/.style={->,>=stealth',ultra thick,black,shorten <=-6pt},
@@ -71,9 +70,9 @@ edg3/.style={black,thick,dotted}]
 \node [black!60,fill,circle,inner sep=2pt] at (4,3) (r) {};
 \node [black!20,fill,circle,inner sep=1pt] at (4,3) (r) {};
 
-\node [fill,circle,inner sep=3pt,label=below left:$p$] at (1.25,1.5) (p0) {};
+\node [fill,circle,inner sep=3pt] at (1.25,1.5) (p0) {};
 \node [fill,gray!75,circle,inner sep=2.25pt] at (1.25,1.5) {};
-\node [fill,circle,inner sep=3pt,label=below left:$q$] at (2.75,.75) (p1) {};
+\node [fill,circle,inner sep=3pt,label=below left:$p$] at (2.75,.75) (p1) {};
 \node [fill,gray!75,circle,inner sep=2.25pt] at (2.75,.75) {};
 \node [fill,circle,inner sep=3pt] at (.75,2.5) (p2) {};
 \node [fill,gray!75,circle,inner sep=2.25pt] at (.75,2.5) {};
@@ -95,11 +94,10 @@ edg3/.style={black,thick,dotted}]
 \draw[edg2] (p0) -- (v2) -- (p1);
 \draw[edg3] (p1) -- (p4) -- (v2) -- (v1);
 \end{tikzpicture}
-\caption{}
 \end{subfigure}
 \end{center}
-\caption{Two-dimensional Pareto frontier}
+\caption{Facet computation special case: facet sharing}
 \centering\sffamily\footnotesize\vspace{2pt}
-Consider minimisation for both objective functions --- $f_1(x) = x_1$ and $f_2(x) = x_2$.
-\label{fig:facet_computation}
+Vertices $v2$ and $v3$ are saved from one point to be used as $v2$ and $v1$ by the next point.\\Triangles are still formed by the points/vertices $[v1,p,v3]$ and $[v1,v2,v3]$.
+\label{fig:facet_computation_special}
 \end{figure}
