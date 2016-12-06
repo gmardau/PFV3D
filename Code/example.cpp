@@ -19,7 +19,7 @@ void example1 ()
 	int n_points, i;
 	double *points;
 	pfv3d visualiser;
-	FILE *f = fopen("Input/surf05.dat", "r");
+	FILE *f = fopen("input/surf05.dat", "r");
 	
 	fscanf(f, "%d", &n_points);
 	points = (double *) malloc(n_points * sizeof(double) * 3);
@@ -42,7 +42,7 @@ void example2 ()
 	int n_points, i, j;
 	double **points;
 	pfv3d visualiser(0, 0, 0, 2);
-	FILE *f = fopen("Input/surf06.dat", "r");
+	FILE *f = fopen("input/surf06.dat", "r");
 
 	fscanf(f, "%d", &n_points);
 	points = (double **) malloc(n_points * sizeof(double *));
@@ -82,7 +82,7 @@ void example3 ()
 	int n_points, i;
 	double **points;
 	pfv3d visualiser(1, 1, 1, 1);
-	FILE *f = fopen("Input/surf05-500.dat", "r");
+	FILE *f = fopen("input/surf05-500.dat", "r");
 
 	fscanf(f, "%d", &n_points);
 	points = (double **) malloc(n_points * sizeof(double *));
@@ -119,7 +119,7 @@ void example4 ()
 	int n_points, i, j;
 	double **points;
 	pfv3d visualiser(0, 0, 0, 1);
-	FILE *f = fopen("Input/surf06.dat", "r");
+	FILE *f = fopen("input/surf06.dat", "r");
 
 	fscanf(f, "%d", &n_points);
 	points = (double **) malloc(n_points * sizeof(double *));
@@ -152,7 +152,7 @@ void example5 ()
 	int n_points, i;
 	double **points;
 	pfv3d visualiser(0, 0, 0, 1);
-	FILE *f = fopen("Input/surf06-500.dat", "r");
+	FILE *f = fopen("input/surf06-500.dat", "r");
 
 	fscanf(f, "%d", &n_points);
 	points = (double **) malloc(n_points * sizeof(double *));
@@ -194,7 +194,7 @@ void example6 ()
 	int n_points, i, j;
 	double **points;
 	pfv3d visualiser(0, 0, 0, 1);
-	FILE *f = fopen("Input/surf05.dat", "r");
+	FILE *f = fopen("input/surf05.dat", "r");
 
 	fscanf(f, "%d", &n_points);
 	points = (double **) malloc(n_points * sizeof(double *));

@@ -3,7 +3,7 @@ class pfv3d_display
 	/* === Variables === */
 	/* PFV3D Data */
 	bool *__oo;
-	_Tree_P *__vertices;
+	_Set_P *__vertices;
 	_List_T *__triangles;
 
 	/* Window */
@@ -11,7 +11,7 @@ class pfv3d_display
 	SDL_GLContext _context;
 	int _window_w, _window_h, _screen_w, _screen_h, _program;
 
-	/* Thread */
+	/* Render thread */
 	bool _running = 1;
 	std::thread _renderer;
 	std::mutex _mutex_cond, _mutex_data;
@@ -52,9 +52,9 @@ class pfv3d_display
 	/* === Variables === */
 
 
-	/* === Constructor/Destructor === */
+	/* === Constructor / Destructor === */
 	public:
-	pfv3d_display (bool *oo, _Tree_P *vertices, _List_T *triangles)
+	pfv3d_display (bool *oo, _Set_P *vertices, _List_T *triangles)
 	    : __oo(oo), __vertices(vertices), __triangles(triangles)
 	{
 		/* Window */
@@ -146,8 +146,8 @@ class pfv3d_display
 		   _view_position_location = glGetUniformLocation(_program, "view_position");
 		int object_colour_location = glGetUniformLocation(_program, "object_colour");
 		int  light_colour_location = glGetUniformLocation(_program, "light_colour");
-		glUniform4f(object_colour_location, 0, 0, 0, 0.75);
-		// glUniform4f(object_colour_location, 1, 1, 1, 0.75);
+		// glUniform4f(object_colour_location, 0, 0, 0, 0.75);
+		glUniform4f(object_colour_location, 1, 1, 1, 0.75);
 		// glUniform4f(object_colour_location, 1, 0.1, 0.05, 0.75);
 		// glUniform4f(object_colour_location, 0.05, 1, 0.1, 0.75);
 		// glUniform4f(object_colour_location, 0.05, 0.1, 1, 0.75);
@@ -178,10 +178,12 @@ class pfv3d_display
 
 	~pfv3d_display ()
 	{
-		free(_vertices);
-		free(_indices);
-		free(_distances);
-		free(_centroids);
+		if(_size_allocated > 0) {
+			free(_vertices);
+			free(_indices);
+			free(_distances);
+			free(_centroids);
+		}
 		_running = 0;
 		_mutex_cond.lock();
 		_cond_renderer.notify_one();
@@ -195,7 +197,7 @@ class pfv3d_display
 		SDL_DestroyWindow(_window);
 		SDL_Quit();
 	}
-	/* === Constructor/Destructor === */
+	/* === Constructor / Destructor === */
 
 
 	/* #################################################################### */
@@ -299,9 +301,9 @@ class pfv3d_display
 
 		/* Update frontier limits */
 		for(i = 0; i < 3; ++i) {
-			for(_Tree_P::iterator it = __vertices[i].begin(); !it.is_sentinel(); ++it)
+			for(_Set_P::iterator it = __vertices[i].begin(); it != __vertices[i].end(); ++it)
 				if((*it)->_n_tri > 0) { _limits[i][__oo[i]]   = (*it)->_x[i]; break; }
-			for(_Tree_P::reverse_iterator it = __vertices[i].rbegin(); !it.is_sentinel(); ++it)
+			for(_Set_P::reverse_iterator it = __vertices[i].rbegin(); it != __vertices[i].rend(); ++it)
 				if((*it)->_n_tri > 0) { _limits[i][__oo[i]^1] = (*it)->_x[i]; break; }
 		}
 
@@ -544,9 +546,10 @@ class pfv3d_display
 
 	/* ##################################################################### */
 	/* ############################# Rendering ############################# */
-	/* === Renderer thread function === */
+	/* === Render thread function === */
 	private:
-	void _render ()
+	void
+	_render ()
 	{
 		bool rendering;
 		SDL_Event event;
@@ -588,19 +591,19 @@ class pfv3d_display
 			if(_mode == 0) _cond_main.notify_one();
 			if(!_running) _mutex_cond.unlock();
 		}
-		pthread_exit(NULL);
 	}
 	/* === Renderer thread function === */
 
 
 	/* === Drawing function === */
 	private:
-	void _draw ()
+	void
+	_draw ()
 	{
 		_mutex_data.lock();
 
 		/* Reset display */
-		glClearColor(1, 1, 1, 1);
+		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		/* Draw Triangles */
@@ -619,7 +622,8 @@ class pfv3d_display
 	/* ###################### Keyboard/Mouse handling ###################### */
 	/* === Keyboard handling === */
 	private:
-	void _keyboard (SDL_Event &event)
+	void
+	_keyboard (SDL_Event &event)
 	{
 		switch(event.key.keysym.sym) {
 			/* R key - reset scene */
@@ -634,7 +638,8 @@ class pfv3d_display
 
 	/* === Mouse handling === */
 	private:
-	void _mouse (SDL_Event &event)
+	void
+	_mouse (SDL_Event &event)
 	{
 		SDL_MouseMotionEvent *motion = &event.motion;
 		SDL_MouseButtonEvent *button = &event.button;
@@ -642,7 +647,7 @@ class pfv3d_display
 		_mutex_data.lock();
 		switch(event.type) {
 			case SDL_MOUSEMOTION:
-				/* Mouse right-click - move camera */
+				/* Mouse left-click - move camera */
 				if(_left_button == 1) {
 					float cpp = sinf(_cam_fov/2.0) * _cam_radius * 2 / _window_h;
 					glm::vec4 translation = glm::vec4(0, -motion->xrel * cpp, motion->yrel*cpp, 1);
@@ -652,7 +657,7 @@ class pfv3d_display
 					_blend_sort();
 				}
 				if(_right_button == 1) {
-					/* Ctrl + Mouse left-click - camera roll */
+					/* Ctrl + Mouse right-click - camera roll */
 					if(_key_ctrl == 1) {
 						glm::vec3 axis = glm::normalize(glm::vec3(_cam_rotate * _cam_initial_view));
 						float angle = motion->xrel / (_screen_w * _mouse_sens) * 2*M_PI;
@@ -661,7 +666,7 @@ class pfv3d_display
 						_update_view_rt();
 						_blend_sort();
 					}
-					/* Alt + Mouse left-click - rotate object */
+					/* Alt + Mouse right-click - rotate object */
 					else if (_key_alt == 1) {
 						float distance = glm::length(glm::vec2(motion->xrel, motion->yrel));
 						glm::vec3 axis = glm::normalize(glm::vec3(0, motion->yrel, motion->xrel));
@@ -672,7 +677,7 @@ class pfv3d_display
 						_update_model();
 						_blend_sort();
 					}
-					/* Shift + Mouse left-click - rotate camera around the z-axis */
+					/* Shift + Mouse right-click - rotate camera around the z-axis */
 					else if(_key_shift == 1) {
 						glm::vec3 tmp_up = glm::vec3(glm::inverse(_cam_rotate) * _obj_rotate * _cam_initial_up);
 						glm::vec3 axis = glm::vec3(0, 0, tmp_up[2] > 0 ? -1 : 1);
@@ -683,7 +688,7 @@ class pfv3d_display
 						_update_view_rt();
 						_blend_sort();
 					}
-					/* Mouse left-click - rotate camera around the object */
+					/* Mouse right-click - rotate camera around the object */
 					else {
 						float distance = glm::length(glm::vec2(motion->xrel, -motion->yrel));
 						glm::vec3 axis = glm::normalize(glm::vec3(0, -motion->yrel, -motion->xrel));
@@ -709,7 +714,7 @@ class pfv3d_display
 				_mouse_x = button->x; _mouse_y = button->y;
 				break;
 
-			/* Zoom - reduce distance from camera to object (FOV reduction in comments) */
+			/* Zoom - adjust distance from camera to object (FOV reduction in comments) */
 			case SDL_MOUSEWHEEL:
 				     if(button->x ==  1) _cam_radius /= _cam_zoom;
 				else if(button->x == -1) _cam_radius *= _cam_zoom;
