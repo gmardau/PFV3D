@@ -625,9 +625,14 @@ class pfv3d_display
 	void
 	_keyboard (SDL_Event &event)
 	{
+		if(event.key.state == SDL_PRESSED)
+			switch(event.key.keysym.sym) {
+				/* R key - reset scene */
+				case SDLK_r: _mutex_data.lock(); _reset(); _update_all(); _mutex_data.unlock(); break;
+				/* Space key - notify main thread */
+				case SDLK_SPACE: _mutex_cond.lock(); _cond_main.notify_one(); _mutex_cond.unlock(); break;
+			}
 		switch(event.key.keysym.sym) {
-			/* R key - reset scene */
-			case SDLK_r: _mutex_data.lock(); _reset(); _update_all(); _mutex_data.unlock(); break;
 			case SDLK_LCTRL:  case SDLK_RCTRL:  _key_ctrl  = event.type == SDL_KEYUP ? 0 : 1; break;
 			case SDLK_LALT:   case SDLK_RALT:   _key_alt   = event.type == SDL_KEYUP ? 0 : 1; break;
 			case SDLK_LSHIFT: case SDLK_RSHIFT: _key_shift = event.type == SDL_KEYUP ? 0 : 1; break;
