@@ -487,6 +487,7 @@ class pfv3d
 		int i, j;
 
 		/* Update limits and compute extremes (to be used by the sentinels) */
+		// /* Memory sync needed */
 		// for(i = 0; i < 3; ++i) _threads[i] = std::thread(&pfv3d::_verify_limits_before, this, i);
 		// for(i = 0; i < 3; ++i) _threads[i].join();
 		for(i = 0; i < 3; ++i) _verify_limits_before(i);
@@ -526,6 +527,7 @@ class pfv3d
 		for(i = 0; i < 3; ++i) _add[i].clear();
 
 		/* Update limits and extremes (non-optimal points may have had influence) */
+		// /* Memory sync needed */
 		// for(i = 0; i < 3; ++i) _threads[i] = std::thread(&pfv3d::_verify_limits_after, this, i);
 		// for(i = 0; i < 3; ++i) _threads[i].join();
 		for(i = 0; i < 3; ++i) _verify_limits_after(i);
